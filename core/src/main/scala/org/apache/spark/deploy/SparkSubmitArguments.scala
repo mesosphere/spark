@@ -71,6 +71,7 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
   var principal: String = null
   var keytab: String = null
   var noCertVerification: Boolean = false
+  var tgt: String = null
 
   // Standalone cluster mode only
   var supervise: Boolean = false
@@ -186,6 +187,7 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
     numExecutors = Option(numExecutors)
       .getOrElse(sparkProperties.get("spark.executor.instances").orNull)
     keytab = Option(keytab).orElse(sparkProperties.get("spark.yarn.keytab")).orNull
+    tgt = Option(tgt).orElse(sparkProperties.get("spark.mesos.kerberos.tgt")).orNull
     principal = Option(principal).orElse(sparkProperties.get("spark.yarn.principal")).orNull
 
     // Try to set main class from JAR if no --class argument is given
@@ -427,6 +429,9 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
       case KEYTAB =>
         keytab = value
 
+      case TGT =>
+        tgt = value
+
       case HELP =>
         printUsageAndExit(0)
 
@@ -538,6 +543,8 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
         |  --supervise                 If given, restarts the driver on failure.
         |  --kill SUBMISSION_ID        If given, kills the driver specified.
         |  --status SUBMISSION_ID      If given, requests the status of the driver specified.
+        |  --tgt TGT                   The full path to the ticket cache file that contains
+        |                              tickets for the Kerberos principal given below.
         |
         | Spark standalone and Mesos only:
         |  --total-executor-cores NUM  Total cores for all executors.
@@ -545,6 +552,16 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
         | Spark standalone and YARN only:
         |  --executor-cores NUM        Number of cores per executor. (Default: 1 in YARN mode,
         |                              or all available cores on the worker in standalone mode)
+        |
+        | YARN and Mesos only:
+        |  --principal PRINCIPAL       Principal to be used to login to KDC, while running on
+        |                              secure HDFS.
+        |  --keytab KEYTAB             The full path to the file that contains the keytab for the
+        |                              principal specified above. For renewing the login tickets
+        |                              and the delegation tokens periodically, this keytab is copied
+        |                              - to the node running the Application Master via the Secure
+        |                                Distributed Cache on YARN,
+        |                              - or to the dispatcher and the driver on Mesos.
         |
         | YARN-only:
         |  --driver-cores NUM          Number of cores used by the driver, only in cluster mode
@@ -555,13 +572,6 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
         |                              executors will be at least NUM.
         |  --archives ARCHIVES         Comma separated list of archives to be extracted into the
         |                              working directory of each executor.
-        |  --principal PRINCIPAL       Principal to be used to login to KDC, while running on
-        |                              secure HDFS.
-        |  --keytab KEYTAB             The full path to the file that contains the keytab for the
-        |                              principal specified above. This keytab will be copied to
-        |                              the node running the Application Master via the Secure
-        |                              Distributed Cache, for renewing the login tickets and the
-        |                              delegation tokens periodically.
       """.stripMargin
     )
 

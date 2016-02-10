@@ -145,6 +145,12 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
             // Ignoring the task kill since the executor is not registered.
             logWarning(s"Attempted to kill task $taskId for unknown executor $executorId.")
         }
+
+      case UpdateDelegationTokens(tokens) =>
+        logInfo("Asking each executor to update HDFS delegation tokens")
+        for ((_, executorData) <- executorDataMap) {
+          executorData.executorEndpoint.send(UpdateDelegationTokens(tokens))
+        }
     }
 
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {

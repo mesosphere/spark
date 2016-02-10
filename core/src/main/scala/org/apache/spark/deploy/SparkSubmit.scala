@@ -20,7 +20,9 @@ package org.apache.spark.deploy
 import java.io.{File, PrintStream}
 import java.lang.reflect.{InvocationTargetException, Modifier, UndeclaredThrowableException}
 import java.net.URL
+import java.nio.file.{Files, Paths}
 import java.security.PrivilegedExceptionAction
+import javax.xml.bind.DatatypeConverter
 
 import scala.annotation.tailrec
 import scala.collection.mutable.{ArrayBuffer, HashMap, Map}
@@ -40,8 +42,8 @@ import org.apache.ivy.plugins.matcher.GlobPatternMatcher
 import org.apache.ivy.plugins.repository.file.FileRepository
 import org.apache.ivy.plugins.resolver.{ChainResolver, FileSystemResolver, IBiblioResolver}
 
-import org.apache.spark.{SPARK_REVISION, SPARK_VERSION, SparkException, SparkUserAppException}
-import org.apache.spark.{SPARK_BRANCH, SPARK_BUILD_DATE, SPARK_BUILD_USER, SPARK_REPO_URL}
+import org.apache.spark.{SPARK_BRANCH, SPARK_BUILD_DATE, SPARK_BUILD_USER, SPARK_REPO_URL, SPARK_REVISION}
+import org.apache.spark.{SPARK_VERSION, SparkConf, SparkException, SparkUserAppException}
 import org.apache.spark.api.r.RUtils
 import org.apache.spark.deploy.rest._
 import org.apache.spark.launcher.SparkLauncher
@@ -469,6 +471,11 @@ object SparkSubmit {
       OptionAssigner(args.principal, YARN, ALL_DEPLOY_MODES, sysProp = "spark.yarn.principal"),
       OptionAssigner(args.keytab, YARN, ALL_DEPLOY_MODES, sysProp = "spark.yarn.keytab"),
 
+      // Mesos cluster only
+      OptionAssigner(args.principal, MESOS, CLUSTER),
+      OptionAssigner(args.keytab, MESOS, CLUSTER),
+      OptionAssigner(args.tgt, MESOS, CLUSTER),
+
       // Other options
       OptionAssigner(args.executorCores, STANDALONE | YARN, ALL_DEPLOY_MODES,
         sysProp = "spark.executor.cores"),
@@ -565,8 +572,51 @@ object SparkSubmit {
           // properties and then loaded by SparkConf
           sysProps.put("spark.yarn.keytab", args.keytab)
           sysProps.put("spark.yarn.principal", args.principal)
+        }
+      }
+    }
 
-          UserGroupInformation.loginUserFromKeytab(args.principal, args.keytab)
+    if (clusterManager == MESOS && args.principal != null) {
+      sysProps.put("spark.yarn.principal", args.principal)
+
+      // set principal used to renew tokens. We use the job token for now
+      // because we have its keytab here and in the scheduler already.
+      sysProps.put("spark.hadoop.yarn.resourcemanager.principal", args.principal)
+
+      if (!args.sparkProperties.contains("spark.mesos.kerberos.keytabBase64") &&
+          !args.sparkProperties.contains("spark.mesos.kerberos.tgtBase64")
+      ) {
+        require(args.keytab != null || args.tgt != null,
+          "Keytab or tgt must be specified when principal is specified")
+        require(args.keytab == null || args.tgt == null,
+          "Keytab and tgt cannot be specified at the same time")
+        if (args.keytab != null && !new File(args.keytab).exists()) {
+          throw new SparkException(s"Keytab file: ${args.keytab} does not exist")
+        }
+        if (args.tgt != null && !new File(args.tgt).exists()) {
+          throw new SparkException(s"tgt file: ${args.tgt} does not exist")
+        }
+
+        val path: String = if (args.keytab != null) args.keytab else args.tgt
+        val key: String =
+          s"spark.mesos.kerberos.${if (args.keytab != null) "keytab" else "tgt"}Base64"
+
+        // load keytab or tgt and pass to the driver via spark property
+        val bytes = Files.readAllBytes(Paths.get(path))
+        sysProps.put(key, DatatypeConverter.printBase64Binary(bytes))
+
+        // set auth mechanism to Kerberos and login locally if in CLIENT mode. In cluster mode
+        // no local Kerberos setup is necessary.
+        if (deployMode == CLIENT) {
+          val hadoopConf = SparkHadoopUtil.get.newConfiguration(new SparkConf())
+          hadoopConf.set("hadoop.security.authentication", "Kerberos")
+          UserGroupInformation.setConfiguration(hadoopConf)
+          if (args.keytab != null) {
+            UserGroupInformation.loginUserFromKeytab(args.principal, args.keytab)
+          } else {
+            val ugi = UserGroupInformation.getUGIFromTicketCache(args.tgt, args.principal)
+            UserGroupInformation.setLoginUser(ugi)
+          }
         }
       }
     }
