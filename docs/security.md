@@ -35,6 +35,7 @@ to configure your cluster manager to store application data on encrypted disks.
 
 ### SSL Configuration
 
+<<<<<<< HEAD
 Configuration for SSL is organized hierarchically. The user can configure the default SSL settings
 which will be used for all the supported communication protocols unless they are overwritten by
 protocol-specific settings. This way the user can easily provide the common settings for all the
@@ -63,7 +64,13 @@ component-specific configuration namespaces used to override the default setting
     <td><code>spark.ssl.historyServer</code></td>
     <td>History Server Web UI</td>
   </tr>
+  <tr>
+    <td><code>spark.ssl.submission</code></td>
+    <td>REST submission server</td>
+  </tr>
 </table>
+
+In cluster mode, you can disable certificate verfification in spark-submit using `spark.ssl.noCertVerification`.
 
 The full breakdown of available SSL options  can be found on the [configuration page](configuration.html).
 SSL must be configured on each node and configured for each component involved in communication using the particular protocol.

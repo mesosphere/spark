@@ -380,8 +380,9 @@ private[spark] class MesosClusterScheduler(
         .map { case (k, v) => "-D" + k.substring("spark.mesos.cluster.taskProperty.".length) + "=" + v }
         .mkString(" ")
 
+    val sslOps = conf.getSSLConf.toArray.map({ case (k, v) => s"-D$k=$v" }).mkString(" ")
     var environment = adjust(desc.command.environment, "SPARK_SUBMIT_OPTS", "")(
-      v => s"$v -Dspark.mesos.driver.frameworkId=${frameworkId}-${desc.submissionId}"
+      v => s"$v -Dspark.mesos.driver.frameworkId=${frameworkId}-${desc.submissionId} $sslOps"
     )
 
     environment = adjust(environment, "SPARK_JAVA_OPTS", "")(
