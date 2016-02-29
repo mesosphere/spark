@@ -373,12 +373,17 @@ private[spark] class MesosClusterScheduler(
   }
 
   private def getDriverEnvironment(desc: MesosDriverDescription): Environment = {
-    // TODO(mgummelt): Don't do this here.  This should be passed as a --conf
-    val commandEnv = adjust(desc.command.environment, "SPARK_SUBMIT_OPTS", "")(
-      v => s"$v -Dspark.mesos.driver.frameworkId=${getDriverFrameworkID(desc)}"
-    )
+    val env = {
+      val driverEnv = desc.conf.getAllWithPrefix("spark.mesos.driverEnv.")
+      val sslOps = conf.getSSLConf.toArray.map({ case (k, v) => s"-D$k=$v" }).mkString(" ")
 
-    val env = desc.conf.getAllWithPrefix("spark.mesos.driverEnv.") ++ commandEnv
+      // TODO(mgummelt): Don't do this here.  This should be passed as a --conf
+      var commandEnv = adjust(desc.command.environment, "SPARK_SUBMIT_OPTS", "")(
+        v => s"$v -Dspark.mesos.driver.frameworkId=${frameworkId}-${desc.submissionId} $sslOps"
+      )
+
+      driverEnv ++ commandEnv
+    }
 
     val envBuilder = Environment.newBuilder()
     env.foreach { case (k, v) =>
