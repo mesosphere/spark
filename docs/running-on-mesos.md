@@ -156,8 +156,9 @@ passing in the Mesos master URL (e.g: mesos://host:5050). This starts the `Mesos
 If you like to run the `MesosClusterDispatcher` with Marathon, you need to run the `MesosClusterDispatcher` in the foreground (i.e: `bin/spark-class org.apache.spark.deploy.mesos.MesosClusterDispatcher`).
 
 From the client, you can submit a job to Mesos cluster by running `spark-submit` and specifying the master URL
-to the URL of the `MesosClusterDispatcher` (e.g: mesos://dispatcher:7077). You can view driver statuses on the
-Spark cluster Web UI.
+to the URL of the `MesosClusterDispatcher` (e.g: mesos://dispatcher:7077 or mesos-ssl://dispatcher:7077). You can view driver statuses on the
+Spark cluster Web UI. Use `mesos-ssl://` if the dispatcher is configured with `spark.ssl.enabled=true`.
+
 
 For example:
 {% highlight bash %}
