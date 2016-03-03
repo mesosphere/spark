@@ -28,10 +28,17 @@ import org.apache.spark.scheduler.cluster.mesos.MesosClusterSubmissionState
 import org.apache.spark.ui.{UIUtils, WebUIPage}
 
 private[mesos] class MesosClusterPage(parent: MesosClusterUI) extends WebUIPage("") {
+  val enableHistory = parent.conf.contains("spark.mesos.historyServer.url")
+
   def render(request: HttpServletRequest): Seq[Node] = {
     val state = parent.scheduler.getSchedulerState()
-    val queuedHeaders = Seq("Driver ID", "Submit Date", "Main Class", "Driver Resources")
-    val driverHeaders = queuedHeaders ++
+
+    val driverHeader = Seq("Driver ID")
+    val historyHeader = if (enableHistory) Seq("History") else Nil
+    val submissionHeader = Seq("Submit Date", "Main Class", "Driver Resources")
+
+    val queuedHeaders = driverHeader ++ submissionHeader
+    val driverHeaders = driverHeader ++ historyHeader ++ submissionHeader ++
       Seq("Start Date", "Mesos Slave ID", "State")
     val retryHeaders = Seq("Driver ID", "Submit Date", "Description") ++
       Seq("Last Failed Status", "Next Retry Time", "Attempt Count")
@@ -68,8 +75,17 @@ private[mesos] class MesosClusterPage(parent: MesosClusterUI) extends WebUIPage(
 
   private def driverRow(state: MesosClusterSubmissionState): Seq[Node] = {
     val id = state.driverDescription.submissionId
+
+    val historyCol = if (enableHistory) {
+      <td>
+        <a href={parent.conf.get("spark.mesos.historyServer.url") +
+          s"/history/${state.frameworkId}-$id"}>${state.frameworkId}-{id}</a>
+      </td>
+    } else Nil
+
     <tr>
       <td><a href={s"driver?id=$id"}>{id}</a></td>
+      {historyCol}
       <td>{state.driverDescription.submissionDate}</td>
       <td>{state.driverDescription.command.mainClass}</td>
       <td>cpus: {state.driverDescription.cores}, mem: {state.driverDescription.mem}</td>
