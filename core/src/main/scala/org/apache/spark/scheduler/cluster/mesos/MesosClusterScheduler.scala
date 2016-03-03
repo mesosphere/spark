@@ -37,12 +37,14 @@ import org.apache.spark.util.Utils
 
 /**
  * Tracks the current state of a Mesos Task that runs a Spark driver.
+ *
  * @param driverDescription Submitted driver description from
  * [[org.apache.spark.deploy.rest.mesos.MesosRestServer]]
  * @param taskId Mesos TaskID generated for the task
  * @param slaveId Slave ID that the task is assigned to
  * @param mesosTaskStatus The last known task status update.
  * @param startDate The date the task was launched
+ * @param frameworkId The framework ID of the launching framework
  */
 private[spark] class MesosClusterSubmissionState(
     val driverDescription: MesosDriverDescription,
@@ -50,12 +52,13 @@ private[spark] class MesosClusterSubmissionState(
     val slaveId: SlaveID,
     var mesosTaskStatus: Option[TaskStatus],
     var startDate: Date,
-    var finishDate: Option[Date])
+    var finishDate: Option[Date],
+    val frameworkId: String)
   extends Serializable {
 
   def copy(): MesosClusterSubmissionState = {
     new MesosClusterSubmissionState(
-      driverDescription, taskId, slaveId, mesosTaskStatus, startDate, finishDate)
+      driverDescription, taskId, slaveId, mesosTaskStatus, startDate, finishDate, frameworkId)
   }
 }
 
@@ -353,6 +356,10 @@ private[spark] class MesosClusterScheduler(
     }
   }
 
+  private def adjust[A, B](m: collection.Map[A, B], k: A, default: B)(f: B => B) = {
+    m.updated(k, f(m.getOrElse(k, default)))
+  }
+
   private def buildDriverCommand(desc: MesosDriverDescription): CommandInfo = {
     val appJar = CommandInfo.URI.newBuilder()
       .setValue(desc.jarUrl.stripPrefix("file:").stripPrefix("local:")).build()
@@ -366,10 +373,14 @@ private[spark] class MesosClusterScheduler(
     } else {
       ""
     }
+
     val envBuilder = Environment.newBuilder()
-    desc.command.environment.foreach { case (k, v) =>
+    adjust(desc.command.environment, "SPARK_SUBMIT_OPTS", "")(
+      v => s"$v -Dspark.mesos.driver.frameworkId=${frameworkId}-${desc.submissionId}"
+    ).foreach { case (k, v) =>
       envBuilder.addVariables(Variable.newBuilder().setName(k).setValue(v).build())
     }
+
     // Pass all spark properties to executor.
     val executorOpts = desc.schedulerProperties.map { case (k, v) => s"-D$k=$v" }.mkString(" ")
     envBuilder.addVariables(
@@ -507,7 +518,7 @@ private[spark] class MesosClusterScheduler(
         logTrace(s"Using offer ${offer.offerId.getValue} to launch driver " +
           submission.submissionId)
         val newState = new MesosClusterSubmissionState(submission, taskId, offer.slaveId,
-          None, new Date(), None)
+          None, new Date(), None, frameworkId)
         launchedDrivers(submission.submissionId) = newState
         launchedDriversState.persist(submission.submissionId, newState)
         afterLaunchCallback(submission.submissionId)
