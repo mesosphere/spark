@@ -79,7 +79,7 @@ private[mesos] class MesosClusterPage(parent: MesosClusterUI) extends WebUIPage(
     val historyCol = if (enableHistory) {
       <td>
         <a href={parent.conf.get("spark.mesos.historyServer.url") +
-          s"/history/${state.frameworkId}-$id"}>${state.frameworkId}-{id}</a>
+          s"/history/${state.frameworkId}-$id"}>{state.frameworkId}-{id}</a>
       </td>
     } else Nil
 
