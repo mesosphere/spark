@@ -833,13 +833,18 @@ Apart from these, the following properties are also available, and may be useful
 </tr>
 <tr>
   <td><code>spark.executor.cores</code></td>
-  <td>1 in YARN mode, all the available cores on the worker in standalone mode.</td>
   <td>
-    The number of cores to use on each executor. For YARN and standalone mode only.
+    1 in YARN mode, all the available cores on the worker in
+    standalone and Mesos coarse-grained modes.
+  </td>
+  <td>
+    The number of cores to use on each executor.
 
-    In standalone mode, setting this parameter allows an application to run multiple executors on
-    the same worker, provided that there are enough cores on that worker. Otherwise, only one
-    executor per application will run on each worker.
+    In standalone and Mesos coarse-grained modes, setting this
+    parameter allows an application to run multiple executors on the
+    same worker, provided that there are enough cores on that
+    worker. Otherwise, only one executor per application will run on
+    each worker.
   </td>
 </tr>
 <tr>
@@ -1247,8 +1252,8 @@ Apart from these, the following properties are also available, and may be useful
   <td>false</td>
   <td>
     Whether to use dynamic resource allocation, which scales the number of executors registered
-    with this application up and down based on the workload. Note that this is currently only
-    available on YARN mode. For more detail, see the description
+    with this application up and down based on the workload. 
+    For more detail, see the description
     <a href="job-scheduling.html#dynamic-resource-allocation">here</a>.
     <br><br>
     This requires <code>spark.shuffle.service.enabled</code> to be set.
@@ -1470,6 +1475,14 @@ Apart from these, the following properties are also available, and may be useful
         </td>
     </tr>
     <tr>
+        <td><code>spark.ssl.keyStoreBase64</code></td>
+        <td>None</td>
+        <td>
+            A base64 encoded key-store file. If this property is defined, spark.ssl.keyStore
+            is ignored.
+        </td>
+    </tr>
+    <tr>
         <td><code>spark.ssl.keyStorePassword</code></td>
         <td>None</td>
         <td>
@@ -1494,10 +1507,27 @@ Apart from these, the following properties are also available, and may be useful
         </td>
     </tr>
     <tr>
+        <td><code>spark.ssl.trustStoreBase64</code></td>
+        <td>None</td>
+        <td>
+            A base64 encoded trust-store file. If this property is defined, spark.ssl.trustStore
+            is ignored.
+        </td>
+    </tr>
+    <tr>
         <td><code>spark.ssl.trustStorePassword</code></td>
         <td>None</td>
         <td>
             A password to the trust-store.
+        </td>
+    </tr>
+    <tr>
+        <td><code>spark.ssl.noCertVerification</code></td>
+        <td>None</td>
+        <td>
+            If set to <code>true</code>, spark-submit will not verify certificates when submitting
+            jobs to a cluster using the REST server, e.g. in cluster mode with the dispatcher in
+            Mesos.
         </td>
     </tr>
 </table>
@@ -1673,7 +1703,7 @@ The following variables can be set in `spark-env.sh`:
   </tr>
   <tr>
     <td><code>PYSPARK_PYTHON</code></td>
-    <td>Python binary executable to use for PySpark in both driver and workers (default is <code>python</code>).</td>
+    <td>Python binary executable to use for PySpark in both driver and workers (default is <code>python2.7</code> if available, otherwise <code>python</code>).</td>
   </tr>
   <tr>
     <td><code>PYSPARK_DRIVER_PYTHON</code></td>

@@ -20,15 +20,17 @@ package org.apache.spark.deploy.rest
 import java.net.InetSocketAddress
 import javax.servlet.http.{HttpServlet, HttpServletRequest, HttpServletResponse}
 
+
 import scala.io.Source
 import com.fasterxml.jackson.core.JsonProcessingException
-import org.eclipse.jetty.server.Server
+import org.eclipse.jetty.server.{Connector, Server}
 import org.eclipse.jetty.servlet.{ServletHolder, ServletContextHandler}
 import org.eclipse.jetty.util.thread.QueuedThreadPool
+import org.eclipse.jetty.server.ssl.SslSelectChannelConnector
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
 
-import org.apache.spark.{Logging, SparkConf, SPARK_VERSION => sparkVersion}
+import org.apache.spark.{SPARK_VERSION => sparkVersion, Logging, SparkConf, SecurityManager}
 import org.apache.spark.util.Utils
 
 /**
@@ -78,7 +80,19 @@ private[spark] abstract class RestSubmissionServer(
    * Return a 2-tuple of the started server and the bound port.
    */
   private def doStart(startPort: Int): (Server, Int) = {
-    val server = new Server(new InetSocketAddress(host, startPort))
+    val sm = new SecurityManager(masterConf)
+    val server = if (sm.submissionServerSSLOptions.enabled) {
+      val ctxFactory = sm.submissionServerSSLOptions.createJettySslContextFactory.get
+      val connector = new SslSelectChannelConnector(ctxFactory)
+      connector.setHost(host)
+      connector.setPort(startPort)
+      val server = new Server
+      server.setConnectors(Array[Connector](connector))
+      server
+    } else {
+      new Server(new InetSocketAddress(host, startPort))
+    }
+
     val threadPool = new QueuedThreadPool
     threadPool.setDaemon(true)
     server.setThreadPool(threadPool)

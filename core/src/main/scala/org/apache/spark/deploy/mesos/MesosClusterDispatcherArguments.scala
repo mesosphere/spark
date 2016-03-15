@@ -44,7 +44,7 @@ private[mesos] class MesosClusterDispatcherArguments(args: Array[String], conf: 
       port = value
       parse(tail)
 
-    case ("--webui-port" | "-p") :: IntParam(value) :: tail =>
+    case ("--webui-port") :: IntParam(value) :: tail =>
       webUiPort = value
       parse(tail)
 

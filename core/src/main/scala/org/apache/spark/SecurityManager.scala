@@ -248,9 +248,12 @@ private[spark] class SecurityManager(sparkConf: SparkConf)
   // configuration at a specified namespace. The namespace *must* start with spark.ssl.
   val fileServerSSLOptions = SSLOptions.parse(sparkConf, "spark.ssl.fs", Some(defaultSSLOptions))
   val akkaSSLOptions = SSLOptions.parse(sparkConf, "spark.ssl.akka", Some(defaultSSLOptions))
+  val submissionServerSSLOptions =
+    SSLOptions.parse(sparkConf, "spark.ssl.submission", Some(defaultSSLOptions))
 
   logDebug(s"SSLConfiguration for file server: $fileServerSSLOptions")
   logDebug(s"SSLConfiguration for Akka: $akkaSSLOptions")
+  logDebug(s"SSLConfiguration for REST submission server: $submissionServerSSLOptions")
 
   val (sslSocketFactory, hostnameVerifier) = if (fileServerSSLOptions.enabled) {
     val trustStoreManagers =

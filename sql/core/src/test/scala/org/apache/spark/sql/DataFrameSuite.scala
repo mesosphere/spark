@@ -516,6 +516,22 @@ class DataFrameSuite extends QueryTest with SharedSQLContext {
     }
   }
 
+  test("unionAll should union DataFrames with UDTs (SPARK-13410)") {
+    val rowRDD1 = sparkContext.parallelize(Seq(Row(1, new ExamplePoint(1.0, 2.0))))
+    val schema1 = StructType(Array(StructField("label", IntegerType, false),
+      StructField("point", new ExamplePointUDT(), false)))
+    val rowRDD2 = sparkContext.parallelize(Seq(Row(2, new ExamplePoint(3.0, 4.0))))
+    val schema2 = StructType(Array(StructField("label", IntegerType, false),
+      StructField("point", new ExamplePointUDT(), false)))
+    val df1 = sqlContext.createDataFrame(rowRDD1, schema1)
+    val df2 = sqlContext.createDataFrame(rowRDD2, schema2)
+
+    checkAnswer(
+      df1.unionAll(df2).orderBy("label"),
+      Seq(Row(1, new ExamplePoint(1.0, 2.0)), Row(2, new ExamplePoint(3.0, 4.0)))
+    )
+  }
+
   ignore("show") {
     // This test case is intended ignored, but to make sure it compiles correctly
     testData.select($"*").show()
@@ -991,6 +1007,7 @@ class DataFrameSuite extends QueryTest with SharedSQLContext {
   test("SPARK-10743: keep the name of expression if possible when do cast") {
     val df = (1 to 10).map(Tuple1.apply).toDF("i").as("src")
     assert(df.select($"src.i".cast(StringType)).columns.head === "i")
+    assert(df.select($"src.i".cast(StringType).cast(IntegerType)).columns.head === "i")
   }
 
   test("SPARK-11301: fix case sensitivity for filter on partitioned columns") {
@@ -1162,5 +1179,11 @@ class DataFrameSuite extends QueryTest with SharedSQLContext {
 
     val primitiveUDF = udf((i: Int) => i * 2)
     checkAnswer(df.select(primitiveUDF($"age")), Row(44) :: Row(null) :: Nil)
+  }
+
+  test("SPARK-12841: cast in filter") {
+    checkAnswer(
+      Seq(1 -> "a").toDF("i", "j").filter($"i".cast(StringType) === "1"),
+      Row(1, "a"))
   }
 }

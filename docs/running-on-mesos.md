@@ -156,8 +156,9 @@ passing in the Mesos master URL (e.g: mesos://host:5050). This starts the `Mesos
 If you like to run the `MesosClusterDispatcher` with Marathon, you need to run the `MesosClusterDispatcher` in the foreground (i.e: `bin/spark-class org.apache.spark.deploy.mesos.MesosClusterDispatcher`).
 
 From the client, you can submit a job to Mesos cluster by running `spark-submit` and specifying the master URL
-to the URL of the `MesosClusterDispatcher` (e.g: mesos://dispatcher:7077). You can view driver statuses on the
-Spark cluster Web UI.
+to the URL of the `MesosClusterDispatcher` (e.g: mesos://dispatcher:7077 or mesos-ssl://dispatcher:7077). You can view driver statuses on the
+Spark cluster Web UI. Use `mesos-ssl://` if the dispatcher is configured with `spark.ssl.enabled=true`.
+
 
 For example:
 {% highlight bash %}
@@ -277,9 +278,11 @@ See the [configuration page](configuration.html) for information on Spark config
   <td><code>spark.mesos.extra.cores</code></td>
   <td><code>0</code></td>
   <td>
-    Set the extra amount of cpus to request per task. This setting is only used for Mesos coarse grain mode.
-    The total amount of cores requested per task is the number of cores in the offer plus the extra cores configured.
-    Note that total amount of cores the executor will request in total will not exceed the <code>spark.cores.max</code> setting.
+    Set the extra number of cores for an executor to advertise. This
+    does not result in more cores allocated.  It instead means that an
+    executor will "pretend" it has more cores, so that the driver will
+    send it more tasks.  Use this to increase parallelism.  This
+    setting is only used for Mesos coarse-grained mode.
   </td>
 </tr>
 <tr>
@@ -347,8 +350,9 @@ See the [configuration page](configuration.html) for information on Spark config
   <td><code>spark.mesos.uris</code></td>
   <td>(none)</td>
   <td>
-    A list of URIs to be downloaded to the sandbox when driver or executor is launched by Mesos.
-    This applies to both coarse-grain and fine-grain mode.
+    A comma-separated list of URIs to be downloaded to the sandbox
+    when driver or executor is launched by Mesos.  This applies to
+    both coarse-grained and fine-grained mode.
   </td>
 </tr>
 <tr>
@@ -385,6 +389,22 @@ See the [configuration page](configuration.html) for information on Spark config
       <li>Text constraints are metched with "equality" semantics i.e. value in the constraint must be exactly equal to the resource offer's value.</li>
       <li>In case there is no value present as a part of the constraint any offer with the corresponding attribute will be accepted (without value check).</li>
     </ul>
+  </td>
+</tr>
+<tr>
+  <td><code>spark.mesos.driver.webui.url</code></td>
+  <td><code>(none)</code></td>
+  <td>
+    Set the Spark Mesos driver webui_url for interacting with the framework.
+    If unset it will point to Spark's internal web UI.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.mesos.dispatcher.webui.url</code></td>
+  <td><code>(none)</code></td>
+  <td>
+    Set the Spark Mesos dispatcher webui_url for interacting with the framework.
+    If unset it will point to Spark's internal web UI.
   </td>
 </tr>
 </table>

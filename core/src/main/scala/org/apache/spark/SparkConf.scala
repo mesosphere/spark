@@ -355,6 +355,10 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging {
      */
     getAll.filter { case (k, _) => isAkkaConf(k) }
 
+  /** Return all spark.ssl.* settings */
+  def getSSLConf: Seq[(String, String)] =
+    getAll.filter { case (k, _) => k.startsWith("spark.ssl.") }
+
   /**
    * Returns the Spark application id, valid in the Driver after TaskScheduler registration and
    * from the start in the Executor.
