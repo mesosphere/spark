@@ -532,4 +532,13 @@ trait MesosSchedulerUtils extends Logging {
       )
     })
   }
+
+  // spark.mesos.driver.frameworkId  is set by the cluster dispatcher to correlate driver
+  // submissions with frameworkIDs.  However, it breaks when a driver process launches more than
+  // one framework because they then try to register with the same ID.  This is so that the
+  // frameworkID only applies to the first framework created.
+  def unsetFrameworkID(sc: SparkContext) {
+    sc.conf.remove("spark.mesos.driver.frameworkId")
+    System.clearProperty("spark.mesos.driver.frameworkId")
+  }
 }
