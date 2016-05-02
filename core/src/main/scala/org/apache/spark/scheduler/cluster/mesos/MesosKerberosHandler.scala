@@ -25,7 +25,8 @@ import javax.xml.bind.DatatypeConverter
 
 import scala.collection.JavaConverters._
 
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.FileSystem
+import org.apache.hadoop.hdfs.HdfsConfiguration
 import org.apache.hadoop.hdfs.security.token.delegation.DelegationTokenIdentifier
 import org.apache.hadoop.security.{Credentials, UserGroupInformation}
 
@@ -57,11 +58,13 @@ class MesosKerberosHandler(conf: SparkConf,
 
   def start(): Unit = {
     logInfo("Starting delegation token renewer")
+    HdfsConfiguration.init()
     renewalThread = new Thread(new Runnable {
       def run() {
         renewLoop()
       }
     })
+    renewalThread.setDaemon(true)
     renewalThread.start()
   }
 
@@ -126,11 +129,9 @@ class MesosKerberosHandler(conf: SparkConf,
 
   private def getHDFSDelegationTokens(ugi: UserGroupInformation): Credentials = {
     val hadoopConf = SparkHadoopUtil.get.newConfiguration(conf)
-    val namenodes = Option(hadoopConf.get("dfs.ha.namenodes.hdfs", null)).
-      map(_.split(",")).getOrElse(Array[String]()).
-      flatMap(id => Option(hadoopConf.get(s"dfs.namenode.rpc-address.hdfs.$id", null))).
-      map(hostPort => new Path(s"hdfs://$hostPort")).
-      toSet
+
+    val namenodes = Set(FileSystem.get(hadoopConf).getHomeDirectory())
+
     logInfo(s"Found these HDFS namenodes: $namenodes")
     val ugiCreds = ugi.getCredentials
     ugi.doAs(new PrivilegedExceptionAction[Unit] {
