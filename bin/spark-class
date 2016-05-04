@@ -65,7 +65,13 @@ if [ -n "${SPARK_MESOS_KRB5_CONF_BASE64}" ]; then
     KRB5_TMP_FILE=$(mktemp -t krb5-XXXXX.conf)
     echo "Writing krb5.conf to $KRB5_TMP_FILE" 1>&2
     echo "${SPARK_MESOS_KRB5_CONF_BASE64}" | ${BASE64_D} > ${KRB5_TMP_FILE}
-    export SPARK_JAVA_OPTS="${SPARK_JAVA_OPTS} -Djava.security.krb5.conf=${KRB5_TMP_FILE}"
+
+    # This was previously set to just SPARK_JAVA_OPTS, but it was
+    # causing a bug where the value in the driver would get passed to
+    # the executor, ultimately overriding the executor's value, and
+    # causing the executor to read from a nonexistent file.
+    export SPARK_SUBMIT_OPTS="${SPARK_SUBMIT_OPTS} -Djava.security.krb5.conf=${KRB5_TMP_FILE}"
+    export SPARK_EXECUTOR_OPTS="${SPARK_EXECUTOR_OPTS} -Djava.security.krb5.conf=${KRB5_TMP_FILE}"
 fi
 
 # For tests
