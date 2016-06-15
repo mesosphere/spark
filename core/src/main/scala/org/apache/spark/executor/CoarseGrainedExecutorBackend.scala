@@ -22,11 +22,11 @@ import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.xml.bind.DatatypeConverter
 
-import org.apache.hadoop.security.UserGroupInformation
-
 import scala.collection.mutable
 import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
+
+import org.apache.hadoop.security.UserGroupInformation
 
 import org.apache.spark._
 import org.apache.spark.TaskState.TaskState

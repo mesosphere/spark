@@ -20,8 +20,8 @@ package org.apache.spark.deploy.rest
 import java.io.{DataOutputStream, FileNotFoundException}
 import java.net.{ConnectException, HttpURLConnection, SocketException, URL}
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.TimeoutException
 import java.security.cert.X509Certificate
+import java.util.concurrent.TimeoutException
 import javax.net.ssl.{HttpsURLConnection, SSLContext, SSLSession, TrustManager, X509TrustManager}
 import javax.servlet.http.HttpServletResponse
 

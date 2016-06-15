@@ -17,22 +17,22 @@
 
 package org.apache.spark.scheduler.cluster.mesos
 
+import java.io.{ByteArrayInputStream, DataInputStream}
 import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermissions
 import java.security.PrivilegedExceptionAction
-import java.io.{ByteArrayInputStream, DataInputStream}
 import javax.xml.bind.DatatypeConverter
 
 import scala.collection.JavaConverters._
 
-import org.apache.hadoop.security.{Credentials, UserGroupInformation}
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hdfs.HdfsConfiguration
 import org.apache.hadoop.hdfs.security.token.delegation.DelegationTokenIdentifier
-import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.security.{Credentials, UserGroupInformation}
 
-import org.apache.spark.{SparkException, SparkConf}
-import org.apache.spark.internal.Logging
+import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.deploy.SparkHadoopUtil
+import org.apache.spark.internal.Logging
 
 
 /**
