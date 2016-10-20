@@ -478,13 +478,13 @@ private[spark] class MesosClusterScheduler(
     desc.conf.getOption("spark.executor.memory").foreach { v =>
       options ++= Seq("--executor-memory", v)
     }
-    desc.conf.get("spark.yarn.principal").map { v =>
+    desc.conf.getOption("spark.yarn.principal").foreach { v =>
       options ++= Seq("--conf", s"spark.yarn.principal=$v")
     }
-    desc.conf.get("spark.mesos.kerberos.keytabBase64").map { v =>
+    desc.conf.getOption("spark.mesos.kerberos.keytabBase64").foreach { v =>
       options ++= Seq("--conf", s"spark.mesos.kerberos.keytabBase64=$v")
     }
-    desc.conf.get("spark.mesos.kerberos.tgtBase64").map { v =>
+    desc.conf.getOption("spark.mesos.kerberos.tgtBase64").foreach { v =>
       options ++= Seq("--conf", s"spark.mesos.kerberos.tgtBase64=$v")
     }
 
