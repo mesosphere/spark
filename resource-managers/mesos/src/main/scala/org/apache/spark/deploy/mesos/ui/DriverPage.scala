@@ -50,7 +50,12 @@ private[ui] class DriverPage(parent: MesosClusterUI) extends WebUIPage("driver")
     val driverDescription = Iterable.apply(driverState.description)
     val submissionState = Iterable.apply(driverState.submissionState)
     val command = Iterable.apply(driverState.description.command)
-    val schedulerProperties = Iterable.apply(driverState.description.conf.getAll.toMap)
+
+    // Do not show kerberos secrets.
+    val schedulerProperties = Iterable.apply(driverState.description.conf.getAll.filter {
+      case (key, _) => !key.startsWith("spark.mesos.kerberos")
+    }.toMap)
+
     val commandEnv = Iterable.apply(driverState.description.command.environment)
     val driverTable =
       UIUtils.listingTable(driverHeaders, driverRow, driverDescription)
