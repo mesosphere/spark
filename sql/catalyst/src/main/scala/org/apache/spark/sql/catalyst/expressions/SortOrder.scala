@@ -53,11 +53,15 @@ case object NullsLast extends NullOrdering{
 /**
  * An expression that can be used to sort a tuple.  This class extends expression primarily so that
  * transformations over expression will descend into its child.
+ * `sameOrderExpressions` is a set of expressions with the same sort order as the child. It is
+ * derived from equivalence relation in an operator, e.g. left/right keys of an inner sort merge
+ * join.
  */
 case class SortOrder(
-  child: Expression,
-  direction: SortDirection,
-  nullOrdering: NullOrdering)
+    child: Expression,
+    direction: SortDirection,
+    nullOrdering: NullOrdering,
+    sameOrderExpressions: Set[Expression])
   extends UnaryExpression with Unevaluable {
 
   /** Sort order is not foldable because we don't have an eval for it. */
@@ -78,11 +82,19 @@ case class SortOrder(
   override def sql: String = child.sql + " " + direction.sql + " " + nullOrdering.sql
 
   def isAscending: Boolean = direction == Ascending
+
+  def satisfies(required: SortOrder): Boolean = {
+    (sameOrderExpressions + child).exists(required.child.semanticEquals) &&
+      direction == required.direction && nullOrdering == required.nullOrdering
+  }
 }
 
 object SortOrder {
-  def apply(child: Expression, direction: SortDirection): SortOrder = {
-    new SortOrder(child, direction, direction.defaultNullOrdering)
+  def apply(
+     child: Expression,
+     direction: SortDirection,
+     sameOrderExpressions: Set[Expression] = Set.empty): SortOrder = {
+    new SortOrder(child, direction, direction.defaultNullOrdering, sameOrderExpressions)
   }
 }
 
@@ -94,17 +106,9 @@ case class SortPrefix(child: SortOrder) extends UnaryExpression {
 
   val nullValue = child.child.dataType match {
     case BooleanType | DateType | TimestampType | _: IntegralType =>
-      if (nullAsSmallest) {
-        Long.MinValue
-      } else {
-        Long.MaxValue
-      }
+      if (nullAsSmallest) Long.MinValue else Long.MaxValue
     case dt: DecimalType if dt.precision - dt.scale <= Decimal.MAX_LONG_DIGITS =>
-      if (nullAsSmallest) {
-        Long.MinValue
-      } else {
-        Long.MaxValue
-      }
+      if (nullAsSmallest) Long.MinValue else Long.MaxValue
     case _: DecimalType =>
       if (nullAsSmallest) {
         DoublePrefixComparator.computePrefix(Double.NegativeInfinity)
@@ -112,16 +116,13 @@ case class SortPrefix(child: SortOrder) extends UnaryExpression {
         DoublePrefixComparator.computePrefix(Double.NaN)
       }
     case _ =>
-      if (nullAsSmallest) {
-        0L
-      } else {
-        -1L
-      }
+      if (nullAsSmallest) 0L else -1L
   }
 
-  private def nullAsSmallest: Boolean = (child.isAscending && child.nullOrdering == NullsFirst) ||
+  private def nullAsSmallest: Boolean = {
+    (child.isAscending && child.nullOrdering == NullsFirst) ||
       (!child.isAscending && child.nullOrdering == NullsLast)
-
+  }
 
   override def eval(input: InternalRow): Any = throw new UnsupportedOperationException
 

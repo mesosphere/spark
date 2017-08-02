@@ -91,20 +91,30 @@ object EvaluatePython {
 
     case (c: Boolean, BooleanType) => c
 
+    case (c: Byte, ByteType) => c
+    case (c: Short, ByteType) => c.toByte
     case (c: Int, ByteType) => c.toByte
     case (c: Long, ByteType) => c.toByte
 
+    case (c: Byte, ShortType) => c.toShort
+    case (c: Short, ShortType) => c
     case (c: Int, ShortType) => c.toShort
     case (c: Long, ShortType) => c.toShort
 
+    case (c: Byte, IntegerType) => c.toInt
+    case (c: Short, IntegerType) => c.toInt
     case (c: Int, IntegerType) => c
     case (c: Long, IntegerType) => c.toInt
 
+    case (c: Byte, LongType) => c.toLong
+    case (c: Short, LongType) => c.toLong
     case (c: Int, LongType) => c.toLong
     case (c: Long, LongType) => c
 
+    case (c: Float, FloatType) => c
     case (c: Double, FloatType) => c.toFloat
 
+    case (c: Float, DoubleType) => c.toDouble
     case (c: Double, DoubleType) => c
 
     case (c: java.math.BigDecimal, dt: DecimalType) => Decimal(c, dt.precision, dt.scale)
@@ -112,6 +122,8 @@ object EvaluatePython {
     case (c: Int, DateType) => c
 
     case (c: Long, TimestampType) => c
+    // Py4J serializes values between MIN_INT and MAX_INT as Ints, not Longs
+    case (c: Int, TimestampType) => c.toLong
 
     case (c, StringType) => UTF8String.fromString(c.toString)
 
@@ -124,11 +136,11 @@ object EvaluatePython {
     case (c, ArrayType(elementType, _)) if c.getClass.isArray =>
       new GenericArrayData(c.asInstanceOf[Array[_]].map(e => fromJava(e, elementType)))
 
-    case (c: java.util.Map[_, _], MapType(keyType, valueType, _)) =>
-      val keyValues = c.asScala.toSeq
-      val keys = keyValues.map(kv => fromJava(kv._1, keyType)).toArray
-      val values = keyValues.map(kv => fromJava(kv._2, valueType)).toArray
-      ArrayBasedMapData(keys, values)
+    case (javaMap: java.util.Map[_, _], MapType(keyType, valueType, _)) =>
+      ArrayBasedMapData(
+        javaMap,
+        (key: Any) => fromJava(key, keyType),
+        (value: Any) => fromJava(value, valueType))
 
     case (c, StructType(fields)) if c.getClass.isArray =>
       val array = c.asInstanceOf[Array[_]]

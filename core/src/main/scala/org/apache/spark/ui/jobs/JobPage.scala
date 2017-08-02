@@ -17,7 +17,7 @@
 
 package org.apache.spark.ui.jobs
 
-import java.util.Date
+import java.util.{Date, Locale}
 import javax.servlet.http.HttpServletRequest
 
 import scala.collection.mutable.{Buffer, ListBuffer}
@@ -77,7 +77,7 @@ private[ui] class JobPage(parent: JobsTab) extends WebUIPage("job") {
          |  'content': '<div class="job-timeline-content" data-toggle="tooltip"' +
          |   'data-placement="top" data-html="true"' +
          |   'data-title="${jsEscapedName} (Stage ${stageId}.${attemptId})<br>' +
-         |   'Status: ${status.toUpperCase}<br>' +
+         |   'Status: ${status.toUpperCase(Locale.ROOT)}<br>' +
          |   'Submitted: ${UIUtils.formatDate(new Date(submissionTime))}' +
          |   '${
                  if (status != "running") {
@@ -187,7 +187,8 @@ private[ui] class JobPage(parent: JobsTab) extends WebUIPage("job") {
     val listener = parent.jobProgresslistener
 
     listener.synchronized {
-      val parameterId = request.getParameter("id")
+      // stripXSS is called first to remove suspicious characters used in XSS attacks
+      val parameterId = UIUtils.stripXSS(request.getParameter("id"))
       require(parameterId != null && parameterId.nonEmpty, "Missing id parameter")
 
       val jobId = parameterId.toInt
@@ -230,20 +231,27 @@ private[ui] class JobPage(parent: JobsTab) extends WebUIPage("job") {
 
       val basePath = "jobs/job"
 
+      val pendingOrSkippedTableId =
+        if (isComplete) {
+          "pending"
+        } else {
+          "skipped"
+        }
+
       val activeStagesTable =
-        new StageTableBase(request, activeStages, "activeStage", parent.basePath,
+        new StageTableBase(request, activeStages, "active", "activeStage", parent.basePath,
           basePath, parent.jobProgresslistener, parent.isFairScheduler,
           killEnabled = parent.killEnabled, isFailedStage = false)
       val pendingOrSkippedStagesTable =
-        new StageTableBase(request, pendingOrSkippedStages, "pendingStage", parent.basePath,
-          basePath, parent.jobProgresslistener, parent.isFairScheduler,
+        new StageTableBase(request, pendingOrSkippedStages, pendingOrSkippedTableId, "pendingStage",
+          parent.basePath, basePath, parent.jobProgresslistener, parent.isFairScheduler,
           killEnabled = false, isFailedStage = false)
       val completedStagesTable =
-        new StageTableBase(request, completedStages, "completedStage", parent.basePath,
+        new StageTableBase(request, completedStages, "completed", "completedStage", parent.basePath,
           basePath, parent.jobProgresslistener, parent.isFairScheduler,
           killEnabled = false, isFailedStage = false)
       val failedStagesTable =
-        new StageTableBase(request, failedStages, "failedStage", parent.basePath,
+        new StageTableBase(request, failedStages, "failed", "failedStage", parent.basePath,
           basePath, parent.jobProgresslistener, parent.isFairScheduler,
           killEnabled = false, isFailedStage = true)
 

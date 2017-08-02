@@ -30,7 +30,7 @@ import org.apache.spark.sql.execution.streaming.FileStreamSource.FileEntry
 import org.apache.spark.sql.internal.SQLConf
 
 class FileStreamSourceLog(
-    metadataLogVersion: String,
+    metadataLogVersion: Int,
     sparkSession: SparkSession,
     path: String)
   extends CompactibleFileStreamLog[FileEntry](metadataLogVersion, sparkSession, path) {
@@ -38,17 +38,17 @@ class FileStreamSourceLog(
   import CompactibleFileStreamLog._
 
   // Configurations about metadata compaction
-  protected override val compactInterval =
-  sparkSession.conf.get(SQLConf.FILE_SOURCE_LOG_COMPACT_INTERVAL)
-  require(compactInterval > 0,
-    s"Please set ${SQLConf.FILE_SOURCE_LOG_COMPACT_INTERVAL.key} (was $compactInterval) to a " +
-      s"positive value.")
+  protected override val defaultCompactInterval: Int =
+    sparkSession.sessionState.conf.fileSourceLogCompactInterval
+
+  require(defaultCompactInterval > 0,
+    s"Please set ${SQLConf.FILE_SOURCE_LOG_COMPACT_INTERVAL.key} " +
+      s"(was $defaultCompactInterval) to a positive value.")
 
   protected override val fileCleanupDelayMs =
-    sparkSession.conf.get(SQLConf.FILE_SOURCE_LOG_CLEANUP_DELAY)
+    sparkSession.sessionState.conf.fileSourceLogCleanupDelay
 
-  protected override val isDeletingExpiredLog =
-    sparkSession.conf.get(SQLConf.FILE_SOURCE_LOG_DELETION)
+  protected override val isDeletingExpiredLog = sparkSession.sessionState.conf.fileSourceLogDeletion
 
   private implicit val formats = Serialization.formats(NoTypeHints)
 
@@ -59,14 +59,6 @@ class FileStreamSourceLog(
     override def removeEldestEntry(eldest: Entry[Long, Array[FileEntry]]): Boolean = {
       size() > cacheSize
     }
-  }
-
-  protected override def serializeData(data: FileEntry): String = {
-    Serialization.write(data)
-  }
-
-  protected override def deserializeData(encodedString: String): FileEntry = {
-    Serialization.read[FileEntry](encodedString)
   }
 
   def compactLogs(logs: Seq[FileEntry]): Seq[FileEntry] = {
@@ -86,7 +78,7 @@ class FileStreamSourceLog(
 
   override def get(startId: Option[Long], endId: Option[Long]): Array[(Long, Array[FileEntry])] = {
     val startBatchId = startId.getOrElse(0L)
-    val endBatchId = getLatest().map(_._1).getOrElse(0L)
+    val endBatchId = endId.orElse(getLatest().map(_._1)).getOrElse(0L)
 
     val (existedBatches, removedBatches) = (startBatchId to endBatchId).map { id =>
       if (isCompactionBatch(id, compactInterval) && fileEntryCache.containsKey(id)) {
@@ -128,5 +120,5 @@ class FileStreamSourceLog(
 }
 
 object FileStreamSourceLog {
-  val VERSION = "v1"
+  val VERSION = 1
 }
