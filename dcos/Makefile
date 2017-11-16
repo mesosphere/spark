@@ -29,12 +29,10 @@ manifest-dist:
 
 HADOOP_VERSION ?= $(shell jq ".default_spark_dist.hadoop_version" "$(ROOT_DIR)/manifest.json")
 
-SPARK_DIR ?= $(ROOT_DIR)/spark
-$(SPARK_DIR):
-	git clone $(SPARK_REPO_URL) $(SPARK_DIR)
+SPARK_DIR ?= $(ROOT_DIR)/..
 
 # Builds a quick dev version of spark from the mesosphere fork
-dev-dist: $(SPARK_DIR)
+dev-dist:
 	cd $(SPARK_DIR)
 	rm -rf spark-*.tgz
 	build/sbt -Xmax-classfile-name -Pmesos "-Phadoop-$(HADOOP_VERSION)" -Phive -Phive-thriftserver package
@@ -60,7 +58,7 @@ dev-dist: $(SPARK_DIR)
 	mkdir -p $(DIST_DIR)
 	cp /tmp/spark-SNAPSHOT.tgz $(DIST_DIR)/
 
-prod-dist: $(SPARK_DIR)
+prod-dist:
 	cd $(SPARK_DIR)
 	rm -rf spark-*.tgz
 	if [ -f make-distribution.sh ]; then \
@@ -78,7 +76,7 @@ prod-dist: $(SPARK_DIR)
 
 # this target serves as default dist type
 $(DIST_DIR):
-	$(MAKE) manifest-dist
+	$(MAKE) prod-dist
 
 clean-dist:
 	@[ ! -e $(DIST_DIR) ] || rm -rf $(DIST_DIR)
