@@ -75,8 +75,10 @@ prod-dist:
 	cp spark-*.tgz $(DIST_DIR)
 
 # this target serves as default dist type
-dist:
+$(DIST_DIR):
 	$(MAKE) prod-dist
+
+dist: $(DIST_DIR)
 
 clean-dist:
 	@[ ! -e $(DIST_DIR) ] || rm -rf $(DIST_DIR)
@@ -85,7 +87,7 @@ docker-login:
 	docker login --email="$(DOCKER_EMAIL)" --username="$(DOCKER_USERNAME)" --password="$(DOCKER_PASSWORD)"
 
 DOCKER_DIST_IMAGE ?= mesosphere/spark-dev:$(GIT_COMMIT)
-docker-dist: dist
+docker-dist: $(DIST_DIR)
 	tar xvf $(DIST_DIR)/spark-*.tgz -C $(DIST_DIR)
 	rm -rf $(BUILD_DIR)/docker
 	mkdir -p $(BUILD_DIR)/docker/dist
