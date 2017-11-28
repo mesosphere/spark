@@ -298,6 +298,7 @@ def test_marathon_group():
     #shakedown.uninstall_package_and_wait(SPARK_PACKAGE_NAME, app_id)
 
 
+@pytest.mark.skip(reason="Temporarily skipping due to spark.driver.secret.name incompatibility")
 @pytest.mark.sanity
 def test_secrets():
     properties_file_path = os.path.join(THIS_DIR, "resources", "secrets-opts.txt")
