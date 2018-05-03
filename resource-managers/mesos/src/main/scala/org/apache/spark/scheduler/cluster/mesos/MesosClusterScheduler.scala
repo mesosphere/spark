@@ -648,7 +648,7 @@ private[spark] class MesosClusterScheduler(
         } catch {
           case e: SparkException =>
             afterLaunchCallback(submission.submissionId)
-            metricsSource.recordFailedDriver(submission)
+            metricsSource.recordExceptionDriver(submission)
             finishedDrivers += new MesosClusterSubmissionState(
               submission,
               TaskID.newBuilder().setValue(submission.submissionId).build(),
@@ -773,6 +773,7 @@ private[spark] class MesosClusterScheduler(
           metricsSource.recordRetryingDriver(state)
           addDriverToPending(newDriverDescription, newDriverDescription.submissionId)
         } else if (TaskState.isFinished(mesosToTaskState(status.getState))) {
+          metricsSource.recordFinishedDriver(state, status.getState)
           retireDriver(subId, state)
         }
         state.mesosTaskStatus = Option(status)
@@ -791,7 +792,6 @@ private[spark] class MesosClusterScheduler(
       val toRemove = math.max(retainedDrivers / 10, 1)
       finishedDrivers.trimStart(toRemove)
     }
-    metricsSource.recordFinishedDriver(state)
     finishedDrivers += state
   }
 
