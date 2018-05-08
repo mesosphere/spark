@@ -18,6 +18,7 @@
 package org.apache.spark.scheduler.cluster.mesos
 
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.Date
 
 import scala.collection.mutable.HashMap
@@ -30,7 +31,7 @@ import org.apache.spark.metrics.source.Source
 
 import org.apache.mesos.Protos.{TaskState => MesosTaskState, _}
 
-private[mesos] class MesosClusterSchedulerSource(scheduler: MesosCoarseGrainedSchedulerBackend)
+private[mesos] class MesosCoarseGrainedSchedulerSource(scheduler: MesosCoarseGrainedSchedulerBackend)
     extends Source with MesosSchedulerUtils {
 
   override val sourceName: String = "mesos_cluster"
@@ -41,33 +42,35 @@ private[mesos] class MesosClusterSchedulerSource(scheduler: MesosCoarseGrainedSc
   // task states.
 
   // Number of CPUs used
-  metricRegistry.register(MetricRegistry.name("executor", "resource", "cpus"), new Gauge[Double] {
-    override def getValue: Double = scheduler.getCoresUsed // totalCoresAcquired
+  metricRegistry.register(MetricRegistry.name("executor", "resource", "cores"), new Gauge[Double] {
+    override def getValue: Double = scheduler.getCoresUsed
   })
   // Number of CPUs vs max
   if (scheduler.getMaxCores != 0) {
-    metricRegistry.register(MetricRegistry.name("executor", "resource", "cpus_of_max"), new Gauge[Double] {
+    metricRegistry.register(MetricRegistry.name("executor", "resource", "cores_of_max"), new Gauge[Double] {
+      // Note: See above div0 check before calling register()
       override def getValue: Double = scheduler.getCoresUsed / scheduler.getMaxCores
     })
   }
   // Number of CPUs per task
-  metricRegistry.register(MetricRegistry.histogram("executor", "resource", "cpus_per_task"), new Gauge[Double] {
-    override def getValue: Double = scheduler.getCoresPerTask // coresByTaskId
+  metricRegistry.register(MetricRegistry.name("executor", "resource", "cores_per_task"), new Gauge[Double] {
+    override def getValue: Double = scheduler.getCoresPerTask
   })
 
   // Number of GPUs used
   metricRegistry.register(MetricRegistry.name("executor", "resource", "gpus"), new Gauge[Double] {
-    override def getValue: Double = scheduler.getGpusUsed // totalGpusAcquired
+    override def getValue: Double = scheduler.getGpusUsed
   })
   // Number of GPUs vs max
   if (scheduler.getMaxGpus != 0) {
     metricRegistry.register(MetricRegistry.name("executor", "resource", "gpus_of_max"), new Gauge[Double] {
+      // Note: See above div0 check before calling register()
       override def getValue: Double = scheduler.getGpusUsed / scheduler.getMaxGpus
     })
   }
-  // Number of CPUs per task
-  metricRegistry.register(MetricRegistry.name("executor", "resource", "gpus_per_task"), new Histogram[Double] {
-    override def getValue: Double = scheduler.getGpusPerTask // gpusByTaskId.values
+  // Number of GPUs per task
+  metricRegistry.register(MetricRegistry.name("executor", "resource", "gpus_per_task"), new Gauge[Double] {
+    override def getValue: Double = scheduler.getGpusPerTask
   })
 
   // Number of tasks
@@ -78,24 +81,21 @@ private[mesos] class MesosClusterSchedulerSource(scheduler: MesosCoarseGrainedSc
   if (scheduler.isExecutorLimitEnabled) {
     // executorLimit is assigned asynchronously, so it may start off with a zero value.
     metricRegistry.register(MetricRegistry.name("executor", "count_of_max"), new Gauge[Int] {
-      override def getValue: Int = scheduler.getExecutorLimit == 0 ? 0 : scheduler.getExecutorCount / scheduler.getExecutorLimit
+      override def getValue: Int = if (scheduler.getExecutorLimit == 0)
+        0 else scheduler.getTaskCount / scheduler.getExecutorLimit
     })
   }
-  // Number of tasks per agent with nonzero tasks
-  metricRegistry.register(MetricRegistry.name("executor", "count_per_occupied_agent"), new Histogram[Int] {
-    override def getValue: Int = scheduler.getTaskCountsPerOccupiedAgent
-  })
   // Number of task failures
   metricRegistry.register(MetricRegistry.name("executor", "failures"), new Gauge[Int] {
-    override def getValue: Int = scheduler.taskFailureCount
+    override def getValue: Int = scheduler.getTaskFailureCount
   })
-  // Number of agent failures across all known agents
-  metricRegistry.register(MetricRegistry.name("executor", "failures_per_known_agent"), new Histogram[Int] {
-    override def getValue: Int = scheduler.getAgentFailuresForAllAgents
+  // Number of tracked agents regardless of whether we're currently present on them
+  metricRegistry.register(MetricRegistry.name("executor", "known_agents"), new Gauge[Int] {
+    override def getValue: Int = scheduler.getKnownAgentsCount
   })
-  // Number of agent failures across agents with our tasks
-  metricRegistry.register(MetricRegistry.name("executor", "failures_per_occupied_agent"), new Histogram[Int] {
-    override def getValue: Int = scheduler.getAgentFailuresForOccupiedAgents
+  // Number of tracked agents with tasks on them
+  metricRegistry.register(MetricRegistry.name("executor", "occupied_agents"), new Gauge[Int] {
+    override def getValue: Int = scheduler.getOccupiedAgentsCount
   })
   // Number of blacklisted agents (too many failures)
   metricRegistry.register(MetricRegistry.name("executor", "blacklisted_agents"), new Gauge[Int] {
@@ -106,19 +106,26 @@ private[mesos] class MesosClusterSchedulerSource(scheduler: MesosCoarseGrainedSc
   // These metrics measure events received from and sent to Mesos
 
   // Rate of offers received (total number of offers, not offer RPCs)
-  private val offerCounter = metricRegistry.counter(MetricRegistry.name("executor", "mesos", "offer"))
+  private val offerCounter =
+    metricRegistry.counter(MetricRegistry.name("executor", "mesos", "offer"))
   // Rate of all offers declined, sum of the following reasons for declines
-  private val declineCounter = metricRegistry.counter(MetricRegistry.name("executor", "mesos", "decline"))
+  private val declineCounter =
+    metricRegistry.counter(MetricRegistry.name("executor", "mesos", "decline"))
   // Offers declined for unmet requirements (with RejectOfferDurationForUnmetConstraints)
-  private val declineUnmetCounter = metricRegistry.counter(MetricRegistry.name("executor", "mesos", "decline_unmet"))
+  private val declineUnmetCounter =
+    metricRegistry.counter(MetricRegistry.name("executor", "mesos", "decline_unmet"))
   // Offers declined when the deployment is finished (with RejectOfferDurationForReachedMaxCores)
-  private val declineFinishedCounter = metricRegistry.counter(MetricRegistry.name("executor", "mesos", "decline_finished"))
+  private val declineFinishedCounter =
+    metricRegistry.counter(MetricRegistry.name("executor", "mesos", "decline_finished"))
   // Offers declined when offers are being ignored/unused (no duration in the decline filter)
-  private val declineIgnoredCounter = metricRegistry.counter(MetricRegistry.name("executor", "mesos", "decline_ignored"))
+  private val declineIgnoredCounter =
+    metricRegistry.counter(MetricRegistry.name("executor", "mesos", "decline_ignored"))
   // Rate of revive operations
-  private val reviveCounter = metricRegistry.counter(MetricRegistry.name("executor", "mesos", "revive"))
+  private val reviveCounter =
+    metricRegistry.counter(MetricRegistry.name("executor", "mesos", "revive"))
   // Rate of launch operations
-  private val launchCounter = metricRegistry.counter(MetricRegistry.name("executor", "mesos", "launch"))
+  private val launchCounter =
+    metricRegistry.counter(MetricRegistry.name("executor", "mesos", "launch"))
 
   // Counters for Spark states on launched executors (LAUNCHING, RUNNING, ...)
   private val sparkStateCounters = TaskState.values
@@ -159,17 +166,17 @@ private[mesos] class MesosClusterSchedulerSource(scheduler: MesosCoarseGrainedSc
     MetricRegistry.name("executor", "launch_to_spark_state", "UNKNOWN"))
 
   // Time that the scheduler was initialized. This is the 'start time'.
-  private val schedulerInitTime = Date.now
+  private val schedulerInitTime = new Date
   // Time that a given task was launched.
-  private val taskLaunchTimeByTaskId = new mutable.HashMap[String, Date]
+  private val taskLaunchTimeByTaskId = new HashMap[String, Date]
 
   // Whether we've had a task be launched or running yet (only record once)
-  private val recordedFirstTaskLaunched = new AtomicBool(false)
-  private val recordedFirstTaskRunning = new AtomicBool(false)
+  private val recordedFirstTaskLaunched = new AtomicBoolean(false)
+  private val recordedFirstTaskRunning = new AtomicBoolean(false)
   // Whether we've had all tasks launched with cpu footprint reached (only record once)
-  private val recordedAllTasksLaunched = new AtomicBool(false)
+  private val recordedAllTasksLaunched = new AtomicBoolean(false)
 
-  def recordOffers(count: Int) Unit = offerCounter.inc(count)
+  def recordOffers(count: Int): Unit = offerCounter.inc(count)
   def recordDeclineUnmet(count: Int): Unit = {
     declineCounter.inc(count)
     declineUnmetCounter.inc(count)
@@ -186,17 +193,18 @@ private[mesos] class MesosClusterSchedulerSource(scheduler: MesosCoarseGrainedSc
 
   def recordTaskLaunch(taskId: String, footprintFilled: Boolean): Unit = {
     launchCounter.inc
-    taskLaunchTimeByTaskId += (taskId, Date.now)
+    taskLaunchTimeByTaskId += (taskId -> new Date)
 
     if (!recordedFirstTaskLaunched.getAndSet(true)) {
-      updateTimer(startToFirstLaunched, schedulerInitTime)
+      recordTimeSince(schedulerInitTime, startToFirstLaunched)
     }
     if (footprintFilled && !recordedAllTasksLaunched.getAndSet(true)) {
-      updateTimer(startToAllLaunched, schedulerInitTime)
+      recordTimeSince(schedulerInitTime, startToAllLaunched)
     }
   }
 
-  def recordTaskStatus(taskId: String, mesosState: MesosTaskState, sparkState: TaskState): Unit = {
+  def recordTaskStatus(taskId: String, mesosState: MesosTaskState, sparkState: TaskState.Value):
+      Unit = {
     mesosStateCounters.get(mesosState) match {
       case Some(counter) => counter.inc
       case None => mesosUnknownStateCounter.inc
@@ -207,25 +215,25 @@ private[mesos] class MesosClusterSchedulerSource(scheduler: MesosCoarseGrainedSc
       case None => sparkUnknownStateCounter.inc
     }
 
-    if (sparkState == TaskState.Value.RUNNING && !recordedFirstTaskRunning.getAndSet(true)) {
+    if (sparkState.equals(TaskState.RUNNING) && !recordedFirstTaskRunning.getAndSet(true)) {
       recordTimeSince(schedulerInitTime, startToFirstRunning)
     }
 
-    val taskLaunchTime = taskLaunchTimeByTaskId.get(taskId)
-    if (taskLaunchTime == null) {
-      // No launch time was found. This can happen when mesos tells us about a task that we're no
-      // longer tracking. For example, this could happen if an agent came back from the dead with
-      // some of our tasks on it, when we'd since moved on because those tasks were LOST.
-      return
-    }
-    if (TaskState.isFinished(sparkState)) {
-      // Remove finished task from our tracking.
-      taskLaunchTimeByTaskId -= taskId
-    }
+    taskLaunchTimeByTaskId.get(taskId) match {
+      case Some(taskLaunchTime) => {
+        launchToSparkStateTimers.get(sparkState) match {
+          case Some(timer) => recordTimeSince(taskLaunchTime, timer)
+          case None => recordTimeSince(taskLaunchTime, launchToUnknownSparkStateTimer)
+        }
 
-    launchToSparkStateTimers.get(sparkState) match {
-      case Some(timer) => recordTimeSince(taskLaunchTime, timer)
-      case None => recordTimeSince(taskLaunchTime, launchToUnknownSparkStateTimer)
+        if (TaskState.isFinished(sparkState)) {
+          // Task finished: Remove from our tracking.
+          taskLaunchTimeByTaskId -= taskId
+        }
+      }
+      case None =>
+        // Unknown task: This can happen when Mesos tells us about a task that we're no longer
+        // tracking. One case is when a very old Mesos agent with tasks reconnects to the master.
     }
   }
 

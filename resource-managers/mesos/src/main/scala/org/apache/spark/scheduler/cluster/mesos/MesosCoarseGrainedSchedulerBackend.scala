@@ -384,7 +384,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
 
           logDebug(s"Launching Mesos task: ${taskId.getValue} with mem: $mem cpu: $cpus" +
             s" ports: $ports")
-          metricsSource.recordTaskLaunch(taskId, totalCoresAcquired >= maxCores)
+          metricsSource.recordTaskLaunch(taskId.getValue, totalCoresAcquired >= maxCores)
         }
 
         driver.launchTasks(
@@ -398,7 +398,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
           Some("reached spark.cores.max"),
           Some(rejectOfferDurationForReachedMaxCores))
       } else {
-        metricsSource.recordDeclineIgnored
+        metricsSource.recordDeclineIgnored(1)
         declineOffer(
           driver,
           offer)
@@ -546,7 +546,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
 
     stateLock.synchronized {
 
-      metricsSource.recordTaskStatus(taskId, state)
+      metricsSource.recordTaskStatus(taskId, status.getState, state)
 
       val slave = slaves(slaveId)
 
@@ -732,22 +732,23 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
 
   def getCoresUsed(): Double = totalCoresAcquired
   def getMaxCores(): Double = maxCores
-  def getCoresPerTask(): Double = coresByTaskId
+  def getCoresPerTask(): Double = if (coresByTaskId.size == 0)
+    0 else coresByTaskId.values.sum / coresByTaskId.size.toDouble
 
   def getGpusUsed(): Double = totalGpusAcquired
   def getMaxGpus(): Double = maxGpus
-  def getGpusPerTask(): Double = gpusByTaskId
+  def getGpusPerTask(): Double = if (gpusByTaskId.size == 0)
+    0 else gpusByTaskId.values.sum / gpusByTaskId.size.toDouble
 
-  def getTaskCount(): Int = taskCount
-  def getExecutorCount(): Int = numExecutors
-  def isExecutorLimitEnabled(): Boolean = executorLimitOption.isPresent
+  def isExecutorLimitEnabled(): Boolean = !executorLimitOption.isEmpty
   def getExecutorLimit(): Int = executorLimit
 
-  def getTaskCountsPerOccupiedAgent(): Collection<Int> = slaves.values.taskIDs.size where size != 0
-  def getTaskFailureCount(): Int = sum(slaves.values.taskFailures)
-  def getAgentFailuresForAllAgents(): Collection<Int> = slaves.values.taskFailures
-  def getAgentFailuresForOccupiedAgents(): Collection<Int> = slaves.values.taskFailures where .taskIds.size != 0
-  def getBlacklistedAgentCount(): Int = len(slaves.values.taskFailures >= max_slave_failures)
+  def getTaskCount(): Int = coresByTaskId.size
+  def getTaskFailureCount(): Int = slaves.values.map(_.taskFailures).sum
+  def getKnownAgentsCount(): Int = slaves.size
+  def getOccupiedAgentsCount(): Int = slaves.values.map(_.taskIDs.size).filter(_ != 0).size
+  def getBlacklistedAgentCount(): Int =
+    slaves.values.filter(_.taskFailures >= MAX_SLAVE_FAILURES).size
 }
 
 private class Slave(val hostname: String) {
