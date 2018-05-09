@@ -54,9 +54,9 @@ private[mesos] class MesosCoarseGrainedSchedulerSource(scheduler: MesosCoarseGra
       })
   }
   // Number of CPUs per task
-  metricRegistry.register(MetricRegistry.name("executor", "resource", "cores_per_task"),
+  metricRegistry.register(MetricRegistry.name("executor", "resource", "mean_cores_per_task"),
     new Gauge[Double] {
-      override def getValue: Double = scheduler.getCoresPerTask
+      override def getValue: Double = scheduler.getMeanCoresPerTask
     })
 
   // Number of GPUs used
@@ -72,16 +72,16 @@ private[mesos] class MesosCoarseGrainedSchedulerSource(scheduler: MesosCoarseGra
       })
   }
   // Number of GPUs per task
-  metricRegistry.register(MetricRegistry.name("executor", "resource", "gpus_per_task"),
+  metricRegistry.register(MetricRegistry.name("executor", "resource", "mean_gpus_per_task"),
     new Gauge[Double] {
-      override def getValue: Double = scheduler.getGpusPerTask
+      override def getValue: Double = scheduler.getMeanGpusPerTask
     })
 
   // Number of tasks
   metricRegistry.register(MetricRegistry.name("executor", "count"), new Gauge[Int] {
     override def getValue: Int = scheduler.getTaskCount
   })
-  // Number of tasks vs vs max
+  // Number of tasks vs max
   if (scheduler.isExecutorLimitEnabled) {
     // executorLimit is assigned asynchronously, so it may start off with a zero value.
     metricRegistry.register(MetricRegistry.name("executor", "count_of_max"), new Gauge[Int] {
