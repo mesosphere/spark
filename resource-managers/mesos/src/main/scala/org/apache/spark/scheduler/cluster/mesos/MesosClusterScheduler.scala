@@ -745,10 +745,16 @@ private[spark] class MesosClusterScheduler(
   override def statusUpdate(driver: SchedulerDriver, status: TaskStatus): Unit = {
     val taskId = status.getTaskId.getValue
 
-    logInfo(s"Received status update: taskId=${taskId}" +
-      s" state=${status.getState}" +
-      s" message=${status.getMessage}" +
-      s" reason=${status.getReason}")
+    if (status.hasReason) {
+      logInfo(s"Received status update: taskId=${taskId}" +
+        s" state=${status.getState}" +
+        s" message='${status.getMessage}'" +
+        s" reason=${status.getReason}")
+    } else {
+      logInfo(s"Received status update: taskId=${taskId}" +
+        s" state=${status.getState}" +
+        s" message='${status.getMessage}'")
+    }
 
     stateLock.synchronized {
       val subId = getSubmissionIdFromTaskId(taskId)

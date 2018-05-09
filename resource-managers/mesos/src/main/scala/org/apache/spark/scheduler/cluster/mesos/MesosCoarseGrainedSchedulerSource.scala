@@ -47,15 +47,17 @@ private[mesos] class MesosCoarseGrainedSchedulerSource(scheduler: MesosCoarseGra
   })
   // Number of CPUs vs max
   if (scheduler.getMaxCores != 0) {
-    metricRegistry.register(MetricRegistry.name("executor", "resource", "cores_of_max"), new Gauge[Double] {
-      // Note: See above div0 check before calling register()
-      override def getValue: Double = scheduler.getCoresUsed / scheduler.getMaxCores
-    })
+    metricRegistry.register(MetricRegistry.name("executor", "resource", "cores_of_max"),
+      new Gauge[Double] {
+        // Note: See above div0 check before calling register()
+        override def getValue: Double = scheduler.getCoresUsed / scheduler.getMaxCores
+      })
   }
   // Number of CPUs per task
-  metricRegistry.register(MetricRegistry.name("executor", "resource", "cores_per_task"), new Gauge[Double] {
-    override def getValue: Double = scheduler.getCoresPerTask
-  })
+  metricRegistry.register(MetricRegistry.name("executor", "resource", "cores_per_task"),
+    new Gauge[Double] {
+      override def getValue: Double = scheduler.getCoresPerTask
+    })
 
   // Number of GPUs used
   metricRegistry.register(MetricRegistry.name("executor", "resource", "gpus"), new Gauge[Double] {
@@ -63,15 +65,17 @@ private[mesos] class MesosCoarseGrainedSchedulerSource(scheduler: MesosCoarseGra
   })
   // Number of GPUs vs max
   if (scheduler.getMaxGpus != 0) {
-    metricRegistry.register(MetricRegistry.name("executor", "resource", "gpus_of_max"), new Gauge[Double] {
-      // Note: See above div0 check before calling register()
-      override def getValue: Double = scheduler.getGpusUsed / scheduler.getMaxGpus
-    })
+    metricRegistry.register(MetricRegistry.name("executor", "resource", "gpus_of_max"),
+      new Gauge[Double] {
+        // Note: See above div0 check before calling register()
+        override def getValue: Double = scheduler.getGpusUsed / scheduler.getMaxGpus
+      })
   }
   // Number of GPUs per task
-  metricRegistry.register(MetricRegistry.name("executor", "resource", "gpus_per_task"), new Gauge[Double] {
-    override def getValue: Double = scheduler.getGpusPerTask
-  })
+  metricRegistry.register(MetricRegistry.name("executor", "resource", "gpus_per_task"),
+    new Gauge[Double] {
+      override def getValue: Double = scheduler.getGpusPerTask
+    })
 
   // Number of tasks
   metricRegistry.register(MetricRegistry.name("executor", "count"), new Gauge[Int] {
@@ -117,9 +121,9 @@ private[mesos] class MesosCoarseGrainedSchedulerSource(scheduler: MesosCoarseGra
   // Offers declined when the deployment is finished (with RejectOfferDurationForReachedMaxCores)
   private val declineFinishedCounter =
     metricRegistry.counter(MetricRegistry.name("executor", "mesos", "decline_finished"))
-  // Offers declined when offers are being ignored/unused (no duration in the decline filter)
-  private val declineIgnoredCounter =
-    metricRegistry.counter(MetricRegistry.name("executor", "mesos", "decline_ignored"))
+  // Offers declined when offers are being unused (no duration in the decline filter)
+  private val declineUnusedCounter =
+    metricRegistry.counter(MetricRegistry.name("executor", "mesos", "decline_unused"))
   // Rate of revive operations
   private val reviveCounter =
     metricRegistry.counter(MetricRegistry.name("executor", "mesos", "revive"))
@@ -185,9 +189,9 @@ private[mesos] class MesosCoarseGrainedSchedulerSource(scheduler: MesosCoarseGra
     declineCounter.inc
     declineFinishedCounter.inc
   }
-  def recordDeclineIgnored(count: Int): Unit = {
+  def recordDeclineUnused(count: Int): Unit = {
     declineCounter.inc(count)
-    declineIgnoredCounter.inc(count)
+    declineUnusedCounter.inc(count)
   }
   def recordRevive: Unit = reviveCounter.inc
 

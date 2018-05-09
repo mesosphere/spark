@@ -175,7 +175,6 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
   override def start() {
     super.start()
 
-    // The MetricsSystem is already started by SparkContext
     sc.env.metricsSystem.registerSource(metricsSource)
 
     val startedBefore = IdHelper.startedBefore.getAndSet(true)
@@ -323,7 +322,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
         logDebug("Ignoring offers during shutdown")
         // Driver should simply return a stopped status on race
         // condition between this.stop() and completing here
-        metricsSource.recordDeclineIgnored(offers.size)
+        metricsSource.recordDeclineUnused(offers.size)
         offers.asScala.map(_.getId).foreach(d.declineOffer)
         return
       }
@@ -398,7 +397,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
           Some("reached spark.cores.max"),
           Some(rejectOfferDurationForReachedMaxCores))
       } else {
-        metricsSource.recordDeclineIgnored(1)
+        metricsSource.recordDeclineUnused(1)
         declineOffer(
           driver,
           offer)
@@ -617,7 +616,6 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
         return
       }
       stopCalled = true
-
       super.stop()
     }
 
