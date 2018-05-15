@@ -24,14 +24,14 @@ import java.util.Date
 import scala.collection.mutable.HashMap
 
 import com.codahale.metrics.{Counter, Gauge, MetricRegistry, Timer}
+import org.apache.mesos.Protos.{TaskState => MesosTaskState}
 
 import org.apache.spark.TaskState
 import org.apache.spark.deploy.mesos.MesosDriverDescription
 import org.apache.spark.metrics.source.Source
 
-import org.apache.mesos.Protos.{TaskState => MesosTaskState, _}
-
-private[mesos] class MesosCoarseGrainedSchedulerSource(scheduler: MesosCoarseGrainedSchedulerBackend)
+private[mesos] class MesosCoarseGrainedSchedulerSource(
+  scheduler: MesosCoarseGrainedSchedulerBackend)
     extends Source with MesosSchedulerUtils {
 
   override val sourceName: String = "mesos_cluster"
@@ -85,8 +85,13 @@ private[mesos] class MesosCoarseGrainedSchedulerSource(scheduler: MesosCoarseGra
   if (scheduler.isExecutorLimitEnabled) {
     // executorLimit is assigned asynchronously, so it may start off with a zero value.
     metricRegistry.register(MetricRegistry.name("executor", "count_of_max"), new Gauge[Int] {
-      override def getValue: Int = if (scheduler.getExecutorLimit == 0)
-        0 else scheduler.getTaskCount / scheduler.getExecutorLimit
+      override def getValue: Int = {
+        if (scheduler.getExecutorLimit == 0) {
+          0
+        } else {
+          scheduler.getTaskCount / scheduler.getExecutorLimit
+        }
+      }
     })
   }
   // Number of task failures
@@ -224,7 +229,7 @@ private[mesos] class MesosCoarseGrainedSchedulerSource(scheduler: MesosCoarseGra
     }
 
     taskLaunchTimeByTaskId.get(taskId) match {
-      case Some(taskLaunchTime) => {
+      case Some(taskLaunchTime) =>
         launchToSparkStateTimers.get(sparkState) match {
           case Some(timer) => recordTimeSince(taskLaunchTime, timer)
           case None => recordTimeSince(taskLaunchTime, launchToUnknownSparkStateTimer)
@@ -234,7 +239,6 @@ private[mesos] class MesosCoarseGrainedSchedulerSource(scheduler: MesosCoarseGra
           // Task finished: Remove from our tracking.
           taskLaunchTimeByTaskId -= taskId
         }
-      }
       case None =>
         // Unknown task: This can happen when Mesos tells us about a task that we're no longer
         // tracking. One case is when a very old Mesos agent with tasks reconnects to the master.

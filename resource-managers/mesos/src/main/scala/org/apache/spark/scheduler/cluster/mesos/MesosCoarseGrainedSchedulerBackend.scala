@@ -730,13 +730,23 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
 
   def getCoresUsed(): Double = totalCoresAcquired
   def getMaxCores(): Double = maxCores
-  def getMeanCoresPerTask(): Double = if (coresByTaskId.size == 0)
-    0 else coresByTaskId.values.sum / coresByTaskId.size.toDouble
+  def getMeanCoresPerTask(): Double = {
+    if (coresByTaskId.size == 0) {
+      0
+    } else {
+      coresByTaskId.values.sum / coresByTaskId.size.toDouble
+    }
+  }
 
   def getGpusUsed(): Double = totalGpusAcquired
   def getMaxGpus(): Double = maxGpus
-  def getMeanGpusPerTask(): Double = if (gpusByTaskId.size == 0)
-    0 else gpusByTaskId.values.sum / gpusByTaskId.size.toDouble
+  def getMeanGpusPerTask(): Double = {
+    if (gpusByTaskId.size == 0) {
+      0
+    } else {
+      gpusByTaskId.values.sum / gpusByTaskId.size.toDouble
+    }
+  }
 
   def isExecutorLimitEnabled(): Boolean = !executorLimitOption.isEmpty
   def getExecutorLimit(): Int = executorLimit

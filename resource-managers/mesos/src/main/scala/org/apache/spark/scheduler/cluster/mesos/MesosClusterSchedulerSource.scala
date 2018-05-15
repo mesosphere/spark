@@ -23,12 +23,11 @@ import java.util.Date
 import scala.collection.mutable.HashMap
 
 import com.codahale.metrics.{Counter, Gauge, MetricRegistry, Timer}
+import org.apache.mesos.Protos.{TaskState => MesosTaskState}
 
 import org.apache.spark.TaskState
 import org.apache.spark.deploy.mesos.MesosDriverDescription
 import org.apache.spark.metrics.source.Source
-
-import org.apache.mesos.Protos.{TaskState => MesosTaskState, _}
 
 private[mesos] class MesosClusterSchedulerSource(scheduler: MesosClusterScheduler)
   extends Source with MesosSchedulerUtils {
@@ -161,14 +160,12 @@ private[mesos] class MesosClusterSchedulerSource(scheduler: MesosClusterSchedule
     // Timers grouped by Spark TaskState:
     val sparkState = mesosToTaskState(mesosState)
     finishSparkStateTimers.get(sparkState) match {
-      case Some(timers) => {
+      case Some(timers) =>
         recordTimeSince(state.driverDescription.submissionDate, timers.submitToFinish)
         recordTimeSince(state.startDate, timers.launchToFinish)
-      }
-      case None => {
+      case None =>
         recordTimeSince(state.driverDescription.submissionDate, submitToFinishUnknownState)
         recordTimeSince(state.startDate, launchToFinishUnknownState)
-      }
     }
 
     // Counter grouped by MesosTaskState:
