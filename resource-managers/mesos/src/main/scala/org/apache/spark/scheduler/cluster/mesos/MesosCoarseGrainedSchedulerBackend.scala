@@ -274,7 +274,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
           .format(prefixEnv, runScript) +
         s" --driver-url $driverURL" +
         s" --executor-id $taskId" +
-        s" --hostname ${executorHostname(offer)}" +
+        " --hostname $(/opt/mesosphere/bootstrap --get-task-ip)" +
         s" --cores $numCores" +
         s" --app-id $appId")
     } else {
@@ -286,7 +286,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
         "./bin/spark-class org.apache.spark.executor.CoarseGrainedExecutorBackend" +
         s" --driver-url $driverURL" +
         s" --executor-id $taskId" +
-        s" --hostname ${executorHostname(offer)}" +
+        " --hostname $(/opt/mesosphere/bootstrap --get-task-ip)" +
         s" --cores $numCores" +
         s" --app-id $appId")
       command.addUris(CommandInfo.URI.newBuilder().setValue(uri.get).setCache(useFetcherCache))
