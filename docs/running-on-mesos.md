@@ -651,7 +651,7 @@ See the [configuration page](configuration.html) for information on Spark config
   <td><code>spark.mesos.executor.gpus</code></td>
   <td><code>0</code></td>
   <td>
-    Set the hard limit on the number of gpus to request for each executor
+    Set the hard limit on the (integer) number of gpus to request for each executor
   </td>
 </tr>
 <tr>
