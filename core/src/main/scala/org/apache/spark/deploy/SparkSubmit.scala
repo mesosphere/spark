@@ -435,7 +435,7 @@ object SparkSubmit extends CommandLineUtils {
               // re-write the RM principal key and use the proxyUser
             //  val key = s"spark.hadoop.${YarnConfiguration.RM_PRINCIPAL}"
             //  sysProps.put(key, args.proxyUser)
-       
+
               // we cannot run as the OS user used by the dispatcher, hive fails
               // and will see the real user eg. root
               sysProps.put("spark.mesos.cluster.mode.proxyUser", args.proxyUser)
@@ -464,7 +464,7 @@ object SparkSubmit extends CommandLineUtils {
          }
       }
     }
-    
+
     // In client mode, download remote files.
     var localPrimaryResource: String = null
     var localJars: String = null

@@ -441,7 +441,7 @@ class SparkHadoopUtil extends Logging {
     creds.readTokenStorageStream(new DataInputStream(tokensBuf))
     creds
   }
- 
+
   def isProxyUser(ugi: UserGroupInformation): Boolean = {
     ugi.getAuthenticationMethod() == UserGroupInformation.AuthenticationMethod.PROXY
   }
