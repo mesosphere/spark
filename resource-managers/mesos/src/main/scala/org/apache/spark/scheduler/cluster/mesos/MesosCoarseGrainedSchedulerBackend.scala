@@ -31,7 +31,6 @@ import org.apache.mesos.Protos.{TaskInfo => MesosTaskInfo, _}
 import org.apache.mesos.SchedulerDriver
 
 import org.apache.spark.{SecurityManager, SparkConf, SparkContext, SparkException, TaskState}
-import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.mesos.config._
 import org.apache.spark.network.netty.SparkTransportConf
 import org.apache.spark.network.shuffle.mesos.MesosExternalShuffleClient
@@ -60,8 +59,6 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
 
   private lazy val hadoopDelegationTokenManager: MesosHadoopDelegationTokenManager =
     new MesosHadoopDelegationTokenManager(conf, sc.hadoopConfiguration, driverEndpoint)
-
-  private val isProxyUser = SparkHadoopUtil.get.isProxyUser(UserGroupInformation.getCurrentUser())
 
   // Blacklist a slave after this many failures
   private val MAX_SLAVE_FAILURES = 2
@@ -181,17 +178,6 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
     super.start()
 
     sc.env.metricsSystem.registerSource(metricsSource)
-
-    // fetch DTs early enough to avoid metastore connection issue
-    // proxy user in cluster mode
-    if (sc.conf.getOption("spark.mesos.cluster.mode.proxyUser").isDefined) {
-      fetchHadoopDelegationTokens()
-    }
-
-    // proxy user in client mode
-    if (isProxyUser && sc.deployMode == "client" ) {
-      fetchHadoopDelegationTokens()
-    }
 
     val startedBefore = IdHelper.startedBefore.getAndSet(true)
 
@@ -747,16 +733,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
 
   override def fetchHadoopDelegationTokens(): Option[Array[Byte]] = {
     if (UserGroupInformation.isSecurityEnabled) {
-      val token_file = sys.env.get("HADOOP_TOKEN_FILE_LOCATION")
-
-      if (token_file.isDefined) {
-        val user = UserGroupInformation.getCurrentUser
-        val creds = user.getCredentials
-        logInfo(s"Fetched tokens fron token file: ${SparkHadoopUtil.get.dumpTokens(creds)}")
-        Some(SparkHadoopUtil.get.serialize(creds))
-      } else {
-        Some(hadoopDelegationTokenManager.getTokens())
-      }
+      Some(hadoopDelegationTokenManager.getTokens())
     } else {
       None
     }

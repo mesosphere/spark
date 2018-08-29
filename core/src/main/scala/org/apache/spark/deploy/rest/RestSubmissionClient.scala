@@ -191,10 +191,6 @@ private[spark] class RestSubmissionClient(master: String) extends Logging {
     logDebug(s"Sending GET request to server at $url.")
     val conn = url.openConnection().asInstanceOf[HttpURLConnection]
     conn.setRequestMethod("GET")
-    sys
-      .env
-      .get("SPARK_DCOS_AUTH_TOKEN")
-      .foreach(token => conn.setRequestProperty("Authorization", s"token=$token"))
     readResponse(conn)
   }
 
@@ -203,10 +199,6 @@ private[spark] class RestSubmissionClient(master: String) extends Logging {
     logDebug(s"Sending POST request to server at $url.")
     val conn = url.openConnection().asInstanceOf[HttpURLConnection]
     conn.setRequestMethod("POST")
-    sys
-      .env
-      .get("SPARK_DCOS_AUTH_TOKEN")
-      .foreach(token => conn.setRequestProperty("Authorization", s"token=$token"))
     readResponse(conn)
   }
 
@@ -218,10 +210,6 @@ private[spark] class RestSubmissionClient(master: String) extends Logging {
     conn.setRequestProperty("Content-Type", "application/json")
     conn.setRequestProperty("charset", "utf-8")
     conn.setDoOutput(true)
-    sys
-      .env
-      .get("SPARK_DCOS_AUTH_TOKEN")
-      .foreach(token => conn.setRequestProperty("Authorization", s"token=$token"))
     try {
       val out = new DataOutputStream(conn.getOutputStream)
       Utils.tryWithSafeFinally {
@@ -312,11 +300,7 @@ private[spark] class RestSubmissionClient(master: String) extends Logging {
       }
     }
     masterUrl = masterUrl.stripSuffix("/")
-    if (sys.env.get("SPARK_MESOS_SSL").isDefined) {
-      s"https://$masterUrl/$PROTOCOL_VERSION/submissions"
-    } else {
-      s"http://$masterUrl/$PROTOCOL_VERSION/submissions"
-    }
+    s"http://$masterUrl/$PROTOCOL_VERSION/submissions"
   }
 
   /** Throw an exception if this is not standalone mode. */
