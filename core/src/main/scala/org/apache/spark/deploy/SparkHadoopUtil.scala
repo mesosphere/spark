@@ -124,12 +124,7 @@ class SparkHadoopUtil extends Logging {
    * Add any user credentials to the job conf which are necessary for running on a secure Hadoop
    * cluster.
    */
-  def addCredentials(conf: JobConf) {
-    val jobCreds = conf.getCredentials()
-    val userCreds = UserGroupInformation.getCurrentUser().getCredentials()
-    logInfo(s"Adding user credentials: ${SparkHadoopUtil.get.dumpTokens(userCreds)}")
-    jobCreds.mergeAll(userCreds)
-  }
+  def addCredentials(conf: JobConf) {}
 
   def isYarnMode(): Boolean = { false }
 
@@ -440,10 +435,6 @@ class SparkHadoopUtil extends Logging {
     val creds = new Credentials()
     creds.readTokenStorageStream(new DataInputStream(tokensBuf))
     creds
-  }
- 
-  def isProxyUser(ugi: UserGroupInformation): Boolean = {
-    ugi.getAuthenticationMethod() == UserGroupInformation.AuthenticationMethod.PROXY
   }
 }
 

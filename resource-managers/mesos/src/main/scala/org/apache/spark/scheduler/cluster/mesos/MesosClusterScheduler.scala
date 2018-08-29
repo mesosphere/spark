@@ -500,10 +500,6 @@ private[spark] class MesosClusterScheduler(
 
   private def buildDriverCommand(desc: MesosDriverDescription): CommandInfo = {
     val builder = CommandInfo.newBuilder()
-    // Pick the user defined OS user for the driver container
-    val driverUser = desc.conf.getOption("spark.mesos.cluster.mode.driverUser")
-    driverUser.foreach(dUser => builder.setUser(dUser))
-
     builder.setValue(getDriverCommandValue(desc))
     builder.setEnvironment(getDriverEnvironment(desc))
     builder.addAllUris(getDriverUris(desc).asJava)
