@@ -18,18 +18,16 @@
 package org.apache.spark.scheduler.cluster.mesos
 
 import java.io.File
-import java.util.{Collections, List => JList}
+import java.util.{Collections, UUID, List => JList}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.ReentrantLock
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.Future
-
 import org.apache.hadoop.security.UserGroupInformation
 import org.apache.mesos.Protos.{TaskInfo => MesosTaskInfo, _}
 import org.apache.mesos.SchedulerDriver
-
 import org.apache.spark.{SecurityManager, SparkConf, SparkContext, SparkException, TaskState}
 import org.apache.spark.deploy.mesos.config._
 import org.apache.spark.network.netty.SparkTransportConf
@@ -162,16 +160,12 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
 
   private val metricsSource = new MesosCoarseGrainedSchedulerSource(this)
 
-  private var nextMesosTaskId = 0
-
   @volatile var appId: String = _
 
   private var schedulerDriver: SchedulerDriver = _
 
   def newMesosTaskId(): String = {
-    val id = nextMesosTaskId
-    nextMesosTaskId += 1
-    id.toString
+    UUID.randomUUID().toString
   }
 
   override def start() {
