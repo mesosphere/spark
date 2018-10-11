@@ -17,11 +17,12 @@
 
 package org.apache.spark.scheduler.cluster.mesos
 
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
-
+import scala.util.Try
 import org.apache.mesos.{Protos, Scheduler, SchedulerDriver}
 import org.apache.mesos.Protos._
 import org.mockito.Matchers
@@ -30,14 +31,13 @@ import org.mockito.Mockito._
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mock.MockitoSugar
 import org.scalatest.BeforeAndAfter
-
 import org.apache.spark.{LocalSparkContext, SecurityManager, SparkConf, SparkContext, SparkFunSuite}
 import org.apache.spark.deploy.mesos.config._
 import org.apache.spark.internal.config._
 import org.apache.spark.network.shuffle.mesos.MesosExternalShuffleClient
 import org.apache.spark.rpc.{RpcAddress, RpcEndpointRef}
 import org.apache.spark.scheduler.TaskSchedulerImpl
-import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{RegisterExecutor}
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.RegisterExecutor
 import org.apache.spark.scheduler.cluster.mesos.Utils._
 
 class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
@@ -596,6 +596,21 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
 
     // Add " 0" to the taskName to match the executor number that is appended
     assert(launchedTasks.head.getName == "test-mesos-dynamic-alloc 0")
+  }
+
+  test("mesos sets different task ids across executions") {
+    setBackend()
+    var offers = List(Resources(backend.executorMemory(sc), 1))
+    offerResources(offers)
+    val firstLaunchTaskId = verifyTaskLaunched(driver, "o1").head.getTaskId.getValue
+    sc.stop()
+
+    setBackend()
+    offers = List(Resources(backend.executorMemory(sc), 1))
+    offerResources(offers)
+    val secondLaunchTaskId = verifyTaskLaunched(driver, "o1").head.getTaskId.getValue
+
+    assert(firstLaunchTaskId != secondLaunchTaskId)
   }
 
   test("mesos sets configurable labels on tasks") {

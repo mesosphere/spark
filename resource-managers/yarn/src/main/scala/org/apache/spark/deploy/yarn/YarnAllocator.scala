@@ -17,7 +17,7 @@
 
 package org.apache.spark.deploy.yarn
 
-import java.util.Collections
+import java.util.{Collections, UUID}
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.regex.Pattern
@@ -26,12 +26,10 @@ import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
-
 import org.apache.hadoop.yarn.api.records._
 import org.apache.hadoop.yarn.client.api.AMRMClient
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest
 import org.apache.hadoop.yarn.conf.YarnConfiguration
-
 import org.apache.spark.{SecurityManager, SparkConf, SparkException}
 import org.apache.spark.deploy.yarn.YarnSparkHadoopUtil._
 import org.apache.spark.deploy.yarn.config._
@@ -40,7 +38,6 @@ import org.apache.spark.internal.config._
 import org.apache.spark.rpc.{RpcCallContext, RpcEndpointRef}
 import org.apache.spark.scheduler.{ExecutorExited, ExecutorLossReason}
 import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.RemoveExecutor
-import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.RetrieveLastAllocatedExecutorId
 import org.apache.spark.util.{Clock, SystemClock, ThreadUtils}
 
 /**
@@ -84,21 +81,9 @@ private[yarn] class YarnAllocator(
 
   private val numExecutorsStarting = new AtomicInteger(0)
 
-  /**
-   * Used to generate a unique ID per executor
-   *
-   * Init `executorIdCounter`. when AM restart, `executorIdCounter` will reset to 0. Then
-   * the id of new executor will start from 1, this will conflict with the executor has
-   * already created before. So, we should initialize the `executorIdCounter` by getting
-   * the max executorId from driver.
-   *
-   * And this situation of executorId conflict is just in yarn client mode, so this is an issue
-   * in yarn client mode. For more details, can check in jira.
-   *
-   * @see SPARK-12864
-   */
-  private var executorIdCounter: Int =
-    driverRef.askSync[Int](RetrieveLastAllocatedExecutorId)
+  // Used to generate a unique ID per executor
+  private val allocatorUuid: String = UUID.randomUUID().toString
+  private var executorIdCounter: Int = 0
 
   // Queue to store the timestamp of failed executors
   private val failedExecutorsTimeStamps = new Queue[Long]()
@@ -495,7 +480,7 @@ private[yarn] class YarnAllocator(
       executorIdCounter += 1
       val executorHostname = container.getNodeId.getHost
       val containerId = container.getId
-      val executorId = executorIdCounter.toString
+      val executorId = s"$allocatorUuid-$executorIdCounter"
       assert(container.getResource.getMemory >= resource.getMemory)
       logInfo(s"Launching container $containerId on host $executorHostname " +
         s"for executor with ID $executorId")
