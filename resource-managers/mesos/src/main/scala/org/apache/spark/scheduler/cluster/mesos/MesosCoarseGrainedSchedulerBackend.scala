@@ -160,12 +160,16 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
 
   private val metricsSource = new MesosCoarseGrainedSchedulerSource(this)
 
+  private var nextMesosTaskId = 0
+
   @volatile var appId: String = _
 
   private var schedulerDriver: SchedulerDriver = _
 
   def newMesosTaskId(): String = {
-    UUID.randomUUID().toString
+    val id = nextMesosTaskId
+    nextMesosTaskId += 1
+    id.toString
   }
 
   override def start() {
@@ -463,7 +467,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
             partitionTaskResources(resources, taskCPUs, taskMemory, taskGPUs)
 
           val taskBuilder = MesosTaskInfo.newBuilder()
-            .setTaskId(TaskID.newBuilder().setValue(taskId.toString).build())
+            .setTaskId(TaskID.newBuilder().setValue(UUID.randomUUID().toString).build())
             .setSlaveId(offer.getSlaveId)
             .setCommand(createCommand(offer, taskCPUs + extraCoresPerExecutor, taskId))
             .setName(s"${sc.appName} $taskId")
