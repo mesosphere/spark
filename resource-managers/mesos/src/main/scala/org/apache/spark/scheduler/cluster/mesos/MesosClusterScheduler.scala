@@ -562,9 +562,9 @@ private[spark] class MesosClusterScheduler(
       .filter { case (key, _) => !replicatedOptionsBlacklist.contains(key) }
       .toMap
     (defaultConf ++ driverConf).foreach { case (key, value) =>
-      options ++= Seq("--conf", s"${key}=${value}") }
+      options ++= Seq("--conf", s"$key=${shellEscape(value)}") }
 
-    options.map(shellEscape)
+    options
   }
 
   /**
