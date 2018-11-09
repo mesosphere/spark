@@ -121,7 +121,7 @@
     <protobuf.version>2.5.0</protobuf.version>
     <yarn.version>${hadoop.version}</yarn.version>
     <flume.version>1.6.0</flume.version>
-    <zookeeper.version>3.4.6</zookeeper.version>
+    <zookeeper.version>3.4.13</zookeeper.version>
     <curator.version>2.6.0</curator.version>
     <hive.group>org.spark-project.hive</hive.group>
     <!-- Version used in Maven Hive dependency -->
@@ -157,9 +157,11 @@
     <commons.collections.version>3.2.2</commons.collections.version>
     <scala.version>2.11.8</scala.version>
     <scala.binary.version>2.11</scala.binary.version>
+    <scala.xml.version>1.1.1</scala.xml.version>
+    <scala.parser.combinators.version>1.1.1</scala.parser.combinators.version>
     <codehaus.jackson.version>1.9.13</codehaus.jackson.version>
-    <fasterxml.jackson.version>2.6.7</fasterxml.jackson.version>
-    <fasterxml.jackson.databind.version>2.6.7.1</fasterxml.jackson.databind.version>
+    <fasterxml.jackson.version>2.9.6</fasterxml.jackson.version>
+    <fasterxml.jackson.databind.version>2.9.6</fasterxml.jackson.databind.version>
     <snappy.version>1.1.2.6</snappy.version>
     <netlib.java.version>1.1.2</netlib.java.version>
     <calcite.version>1.2.0-incubating</calcite.version>
@@ -708,7 +710,7 @@
       <dependency>
         <groupId>org.json4s</groupId>
         <artifactId>json4s-jackson_${scala.binary.version}</artifactId>
-        <version>3.2.11</version>
+        <version>3.6.2</version>
       </dependency>
       <dependency>
         <groupId>org.scala-lang</groupId>
@@ -733,7 +735,7 @@
       <dependency>
         <groupId>org.scala-lang.modules</groupId>
         <artifactId>scala-parser-combinators_${scala.binary.version}</artifactId>
-        <version>1.0.4</version>
+        <version>${scala.parser.combinators.version}</version>
       </dependency>
       <dependency>
         <groupId>org.scala-lang</groupId>
@@ -745,6 +747,11 @@
         <groupId>jline</groupId>
         <artifactId>jline</artifactId>
         <version>2.12.1</version>
+      </dependency>
+      <dependency>
+        <groupId>org.scala-lang.modules</groupId>
+        <artifactId>scala-xml_${scala.binary.version}</artifactId>
+        <version>${scala.xml.version}</version>
       </dependency>
       <dependency>
         <groupId>org.scalatest</groupId>
@@ -2664,7 +2671,7 @@
     <profile>
       <id>hadoop-2.7</id>
       <properties>
-        <hadoop.version>2.7.3</hadoop.version>
+        <hadoop.version>2.7.7</hadoop.version>
         <curator.version>2.7.1</curator.version>
       </properties>
     </profile>
