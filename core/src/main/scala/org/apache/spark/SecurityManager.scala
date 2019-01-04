@@ -523,8 +523,8 @@ private[spark] class SecurityManager(
   }
 
   /**
-    * Trying to find a File Based Secret with path specified in SPARK_AUTH_SECRET_CONF
-    */
+   * Trying to find a File Based Secret with path specified in SPARK_AUTH_SECRET_CONF
+   */
   def getFileBasedSecret(): Option[String] = {
     sparkConf
       .getOption(SPARK_AUTH_SECRET_CONF)
