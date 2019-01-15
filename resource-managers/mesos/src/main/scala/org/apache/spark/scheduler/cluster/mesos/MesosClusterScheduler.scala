@@ -381,6 +381,11 @@ private[spark] class MesosClusterScheduler(
     desc.retryState.map(state => sId + s"${RETRY_SEP}${state.retries.toString}").getOrElse(sId)
   }
 
+//  private def getRetryCountFromTaskId(taskId: String): Int = {
+//    val parts = taskId.split(s"${RETRY_SEP}")
+//    if (parts.length > 1) parts.last.toInt else 0
+//  }
+
   private def getSubmissionIdFromTaskId(taskId: String): String = {
     taskId.split(s"${RETRY_SEP}").head
   }
@@ -735,9 +740,17 @@ private[spark] class MesosClusterScheduler(
    * Task state like TASK_ERROR are not relaunchable state since it wasn't able
    * to be validated by Mesos.
    */
-  private def shouldRelaunch(state: MesosTaskState): Boolean = {
+  private def shouldRelaunch(state: MesosTaskState, subId: String): Boolean = {
     state == MesosTaskState.TASK_FAILED ||
-      state == MesosTaskState.TASK_LOST
+      state == MesosTaskState.TASK_LOST && {
+        logInfo(s"Verifying $subId has not already been launched elsewhere")
+        if (launchedDriversState.fetch(subId).isEmpty) {
+          true
+        } else {
+          logInfo(s"SubmissionId: $subId has already been re-launched!")
+          false
+        }
+      }
   }
 
   override def statusUpdate(driver: SchedulerDriver, status: TaskStatus): Unit = {
@@ -764,7 +777,9 @@ private[spark] class MesosClusterScheduler(
         }
         val state = launchedDrivers(subId)
         // Check if the driver is supervise enabled and can be relaunched.
-        if (state.driverDescription.supervise && shouldRelaunch(status.getState)) {
+        logTrace(s"Checking if $taskId is supervised and shouldRelaunch")
+        if (state.driverDescription.supervise && shouldRelaunch(status.getState, subId)) {
+            // && retryCountIsLatest(taskId, state)) {
           removeFromLaunchedDrivers(subId)
           state.finishDate = Some(new Date())
           val retryState: Option[MesosClusterRetryState] = state.driverDescription.retryState
@@ -786,6 +801,13 @@ private[spark] class MesosClusterScheduler(
       }
     }
   }
+
+//  private def retryCountIsLatest(taskId: String, state: MesosClusterSubmissionState): Boolean = {
+//    state.driverDescription.retryState match {
+//      case Some(retryState) => getRetryCountFromTaskId(taskId) > retryState.retries
+//      case _ => true
+//    }
+//  }
 
   private def retireDriver(
       submissionId: String,

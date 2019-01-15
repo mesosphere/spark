@@ -421,6 +421,73 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
     assert(state.finishedDrivers.size == 1)
   }
 
+  test("does not restart outdated supervised drivers when an agent is lost and comes back") {
+    val conf = new SparkConf()
+    conf.setMaster("mesos://localhost:5050")
+    conf.setAppName("SparkMesosDriverRetries")
+    setScheduler(conf.getAll.toMap)
+
+    val mem = 1000
+    val cpu = 1
+    val offers = List(
+      Utils.createOffer("o1", "s1", mem, cpu, None),
+      Utils.createOffer("o2", "s2", mem, cpu, None),
+      Utils.createOffer("o3", "s1", mem, cpu, None))
+
+    val response = scheduler.submitDriver(
+      new MesosDriverDescription("d1", "jar", 100, 1, true, command,
+        Map(("spark.mesos.executor.home", "test"), ("spark.app.name", "test")), "s1", new Date()))
+    assert(response.success)
+    val slaveId = SlaveID.newBuilder().setValue("s1").build()
+
+    // Offer a resource to launch the submitted driver
+    scheduler.resourceOffers(driver, Collections.singletonList(offers.head))
+    var state = scheduler.getSchedulerState()
+    assert(state.launchedDrivers.size == 1)
+
+    // Signal agent lost triggering a retry
+    scheduler.slaveLost(driver, slaveId)
+
+    var taskStatus = TaskStatus.newBuilder()
+      .setTaskId(TaskID.newBuilder().setValue(response.submissionId).build())
+      .setSlaveId(slaveId)
+      .setState(MesosTaskState.TASK_LOST)
+      .build()
+
+    // Update the status of the lost task
+    scheduler.statusUpdate(driver, taskStatus)
+
+    state = scheduler.getSchedulerState()
+    assert(state.pendingRetryDrivers.nonEmpty)
+    assert(state.launchedDrivers.isEmpty)
+
+    // Offer new resource to restart driver on a new agent
+    scheduler.resourceOffers(driver, Collections.singletonList(offers(1)))
+    state = scheduler.getSchedulerState()
+
+    taskStatus = TaskStatus.newBuilder()
+      .setTaskId(TaskID.newBuilder().setValue(response.submissionId).build())
+      .setSlaveId(slaveId)
+      .setState(MesosTaskState.TASK_RUNNING)
+      .build()
+
+    // Update the status of the lost task
+    scheduler.statusUpdate(driver, taskStatus)
+
+    // Bring agent back and offer its resources
+    scheduler.resourceOffers(driver, Collections.singletonList(offers.last))
+    state = scheduler.getSchedulerState()
+
+    // Assert old driver does not restart
+    assert(state.launchedDrivers.size == 1)
+
+    // Driver should be moved to finishedDrivers for kill
+    state = scheduler.getSchedulerState()
+    assert(state.pendingRetryDrivers.isEmpty)
+    // assert(state.launchedDrivers.isEmpty)
+    // assert(state.finishedDrivers.size == 1)
+  }
+
   test("Declines offer with refuse seconds = 120.") {
     setScheduler()
 
