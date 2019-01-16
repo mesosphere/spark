@@ -740,17 +740,9 @@ private[spark] class MesosClusterScheduler(
    * Task state like TASK_ERROR are not relaunchable state since it wasn't able
    * to be validated by Mesos.
    */
-  private def shouldRelaunch(state: MesosTaskState, subId: String): Boolean = {
+  private def shouldRelaunch(state: MesosTaskState): Boolean = {
     state == MesosTaskState.TASK_FAILED ||
-      state == MesosTaskState.TASK_LOST && {
-        logInfo(s"Verifying $subId has not already been launched elsewhere")
-        if (launchedDriversState.fetch(subId).isEmpty) {
-          true
-        } else {
-          logInfo(s"SubmissionId: $subId has already been re-launched!")
-          false
-        }
-      }
+      state == MesosTaskState.TASK_LOST
   }
 
   override def statusUpdate(driver: SchedulerDriver, status: TaskStatus): Unit = {
@@ -777,7 +769,6 @@ private[spark] class MesosClusterScheduler(
         }
         val state = launchedDrivers(subId)
         // Check if the driver is supervise enabled and can be relaunched.
-        logTrace(s"Checking if $taskId is supervised and shouldRelaunch")
         if (state.driverDescription.supervise && shouldRelaunch(status.getState, subId)) {
           if (taskIsNotOutdated(taskId, state)) {
             removeFromLaunchedDrivers(subId)
@@ -808,11 +799,9 @@ private[spark] class MesosClusterScheduler(
   }
 
   private def taskIsNotOutdated(taskId: String, state: MesosClusterSubmissionState): Boolean = {
-    logInfo(s"Verifying $taskId is not outdated")
     if (getRetryCountFromTaskId(taskId) >= getRetryCountFromTaskId(state.frameworkId)) {
       true
     } else {
-      logInfo(s"$taskId is outdated and should be disregarded")
       false
     }
   }

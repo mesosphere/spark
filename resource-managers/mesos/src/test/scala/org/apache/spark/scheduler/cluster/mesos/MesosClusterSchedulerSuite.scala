@@ -454,6 +454,7 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
     var taskStatus = TaskStatus.newBuilder()
       .setTaskId(TaskID.newBuilder().setValue(response.submissionId).build())
       .setSlaveId(agent1)
+      .setReason(TaskStatus.Reason.REASON_SLAVE_REMOVED)
       .setState(MesosTaskState.TASK_LOST)
       .build()
 
@@ -484,6 +485,8 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
       .setTaskId(TaskID.newBuilder().setValue(response.submissionId).build())
       .setSlaveId(agent1)
       .setState(MesosTaskState.TASK_FAILED)
+      .setMessage("Abnormal executor termination")
+      .setReason(TaskStatus.Reason.REASON_EXECUTOR_TERMINATED)
       .build()
 
     scheduler.statusUpdate(driver, taskStatus)
