@@ -346,7 +346,7 @@ private[spark] class MesosClusterScheduler(
       this.masterInfo = Some(masterInfo)
       this.schedulerDriver = driver
 
-      if (!pendingRecover.isEmpty) {
+      if (pendingRecover.nonEmpty) {
         // Start task reconciliation if we need to recover.
         val statuses = pendingRecover.collect {
           case (taskId, slaveId) =>
@@ -381,10 +381,10 @@ private[spark] class MesosClusterScheduler(
     desc.retryState.map(state => sId + s"${RETRY_SEP}${state.retries.toString}").getOrElse(sId)
   }
 
-//  private def getRetryCountFromTaskId(taskId: String): Int = {
-//    val parts = taskId.split(s"${RETRY_SEP}")
-//    if (parts.length > 1) parts.last.toInt else 0
-//  }
+  private def getRetryCountFromTaskId(taskId: String): Int = {
+    val parts = taskId.split(s"${RETRY_SEP}")
+    if (parts.length > 1) parts.last.toInt else 0
+  }
 
   private def getSubmissionIdFromTaskId(taskId: String): String = {
     taskId.split(s"${RETRY_SEP}").head
@@ -778,8 +778,8 @@ private[spark] class MesosClusterScheduler(
         val state = launchedDrivers(subId)
         // Check if the driver is supervise enabled and can be relaunched.
         logTrace(s"Checking if $taskId is supervised and shouldRelaunch")
-        if (state.driverDescription.supervise && shouldRelaunch(status.getState, subId)) {
-            // && retryCountIsLatest(taskId, state)) {
+        if (state.driverDescription.supervise && shouldRelaunch(status.getState, subId)
+             && taskIsNotOutdated(taskId, state)) {
           removeFromLaunchedDrivers(subId)
           state.finishDate = Some(new Date())
           val retryState: Option[MesosClusterRetryState] = state.driverDescription.retryState
@@ -802,12 +802,15 @@ private[spark] class MesosClusterScheduler(
     }
   }
 
-//  private def retryCountIsLatest(taskId: String, state: MesosClusterSubmissionState): Boolean = {
-//    state.driverDescription.retryState match {
-//      case Some(retryState) => getRetryCountFromTaskId(taskId) > retryState.retries
-//      case _ => true
-//    }
-//  }
+  private def taskIsNotOutdated(taskId: String, state: MesosClusterSubmissionState): Boolean = {
+    logInfo(s"Verifying $taskId is not outdated")
+    if (getRetryCountFromTaskId(taskId) > getRetryCountFromTaskId(state.frameworkId)) {
+      true
+    } else {
+      logInfo(s"$taskId is outdated and should be disregarded")
+      false
+    }
+  }
 
   private def retireDriver(
       submissionId: String,
