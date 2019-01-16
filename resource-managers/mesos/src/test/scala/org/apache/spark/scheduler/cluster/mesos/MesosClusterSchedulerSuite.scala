@@ -441,7 +441,7 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
 
     val response = scheduler.submitDriver(
       new MesosDriverDescription("d1", "jar", 100, 1, true, command,
-        Map(("spark.mesos.executor.home", "test"), ("spark.app.name", "test")), "s1", new Date()))
+        Map(("spark.mesos.executor.home", "test"), ("spark.app.name", "test")), "sub1", new Date()))
     assert(response.success)
     val agent1 = SlaveID.newBuilder().setValue("s1").build()
 
@@ -463,7 +463,9 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
     assert(state.launchedDrivers.isEmpty)
 
     // Offer new resource to restart driver on a new agent
+    Thread.sleep(1500) // simulate wait time
     scheduler.resourceOffers(driver, Collections.singletonList(offers(1)))
+
     val agent2 = SlaveID.newBuilder().setValue("s2").build()
     taskStatus = TaskStatus.newBuilder()
       .setTaskId(TaskID.newBuilder().setValue(response.submissionId).build())
@@ -475,7 +477,7 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
     state = scheduler.getSchedulerState()
     assert(state.pendingRetryDrivers.isEmpty)
     assert(state.launchedDrivers.size == 1)
-    assert(state.frameworkId.endsWith("-retry-1"))
+    assert(state.launchedDrivers.head.taskId.getValue.endsWith("-retry-1"))
 
     // Agent1 comes back online and sends status update: TASK_FAILED
     taskStatus = TaskStatus.newBuilder()
@@ -491,7 +493,7 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
     state = scheduler.getSchedulerState()
     assert(state.pendingRetryDrivers.isEmpty)
     assert(state.launchedDrivers.size == 1)
-    assert(state.frameworkId.endsWith("retry-1"))
+    assert(state.launchedDrivers.head.taskId.getValue.endsWith("-retry-1"))
   }
 
   test("Declines offer with refuse seconds = 120.") {
