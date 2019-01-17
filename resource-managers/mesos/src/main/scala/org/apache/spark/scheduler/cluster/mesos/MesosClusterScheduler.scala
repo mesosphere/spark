@@ -782,8 +782,7 @@ private[spark] class MesosClusterScheduler(
             .getOrElse{ (1, 1) }
           val nextRetry = new Date(new Date().getTime + waitTimeSec * 1000L)
           val newDriverDescription = state.driverDescription.copy(
-            retryState = Some(
-              new MesosClusterRetryState(status, retries, nextRetry, waitTimeSec)))
+            retryState = Some(new MesosClusterRetryState(status, retries, nextRetry, waitTimeSec)))
           metricsSource.recordRetryingDriver(state)
           addDriverToPending(newDriverDescription, newDriverDescription.submissionId)
         } else if (TaskState.isFinished(mesosToTaskState(status.getState))) {

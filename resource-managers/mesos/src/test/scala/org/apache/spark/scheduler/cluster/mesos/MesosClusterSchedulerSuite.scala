@@ -443,7 +443,6 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
       new MesosDriverDescription("d1", "jar", 100, 1, true, command,
         Map(("spark.mesos.executor.home", "test"), ("spark.app.name", "test")), "sub1", new Date()))
     assert(response.success)
-    val agent1 = SlaveID.newBuilder().setValue("s1").build()
 
     // Offer a resource to launch the submitted driver
     scheduler.resourceOffers(driver, Collections.singletonList(offers.head))
@@ -451,6 +450,7 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
     assert(state.launchedDrivers.size == 1)
 
     // Signal agent lost with status with TASK_LOST
+    val agent1 = SlaveID.newBuilder().setValue("s1").build()
     var taskStatus = TaskStatus.newBuilder()
       .setTaskId(TaskID.newBuilder().setValue(response.submissionId).build())
       .setSlaveId(agent1)
@@ -463,8 +463,8 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
     assert(state.pendingRetryDrivers.size == 1)
     assert(state.launchedDrivers.isEmpty)
 
-    // Offer new resource to restart driver on a new agent
-    Thread.sleep(1500) // simulate wait time
+    // Offer new resource to retry driver on a new agent
+    Thread.sleep(1500) // sleep to cover nextRetry's default wait time of 1s
     scheduler.resourceOffers(driver, Collections.singletonList(offers(1)))
 
     val agent2 = SlaveID.newBuilder().setValue("s2").build()
@@ -492,7 +492,7 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
     scheduler.statusUpdate(driver, taskStatus)
     scheduler.resourceOffers(driver, Collections.singletonList(offers.last))
 
-    // Assert driver does not restart
+    // Assert driver does not restart 2nd time
     state = scheduler.getSchedulerState()
     assert(state.pendingRetryDrivers.isEmpty)
     assert(state.launchedDrivers.size == 1)

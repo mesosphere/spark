@@ -27,7 +27,7 @@ import scala.collection.mutable
 import scala.concurrent.Future
 
 import org.apache.hadoop.security.UserGroupInformation
-import org.apache.mesos.Protos._
+import org.apache.mesos.Protos.{TaskInfo => MesosTaskInfo, _}
 import org.apache.mesos.SchedulerDriver
 
 import org.apache.spark.{SecurityManager, SparkConf, SparkContext, SparkException, TaskState}
@@ -487,9 +487,9 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
    * @param offers Mesos offers that match attribute constraints
    * @return A map from OfferID to a list of Mesos tasks to launch on that offer
    */
-  private def buildMesosTasks(offers: mutable.Buffer[Offer]): Map[OfferID, List[TaskInfo]] = {
+  private def buildMesosTasks(offers: mutable.Buffer[Offer]): Map[OfferID, List[MesosTaskInfo]] = {
     // offerID -> tasks
-    val tasks = new mutable.HashMap[OfferID, List[TaskInfo]].withDefaultValue(Nil)
+    val tasks = new mutable.HashMap[OfferID, List[MesosTaskInfo]].withDefaultValue(Nil)
 
     // offerID -> resources
     val remainingResources = mutable.Map(offers.map(offer =>
@@ -523,7 +523,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
           val (resourcesLeft, resourcesToUse) =
             partitionTaskResources(resources, taskCPUs, taskMemory, taskGPUs)
 
-          val taskBuilder = TaskInfo.newBuilder()
+          val taskBuilder = MesosTaskInfo.newBuilder()
             .setTaskId(TaskID.newBuilder().setValue( s"$schedulerUuid-$taskId").build())
             .setSlaveId(offer.getSlaveId)
             .setCommand(createCommand(offer, taskCPUs + extraCoresPerExecutor, taskId))
