@@ -146,6 +146,7 @@ private[spark] class MesosClusterScheduler(
   private val pendingRecover = new mutable.HashMap[String, SlaveID]()
   // Stores all the submitted drivers that hasn't been launched, keyed by submission id
   private val queuedDrivers = new ArrayBuffer[MesosDriverDescription]()
+  private val retriedDrivers = new mutable.HashSet[String]()
   // All supervised drivers that are waiting to retry after termination, keyed by submission id
   private val pendingRetryDrivers = new ArrayBuffer[MesosDriverDescription]()
   private val queuedDriversState = engineFactory.createEngine("driverQueue")
@@ -379,11 +380,6 @@ private[spark] class MesosClusterScheduler(
   private def getDriverTaskId(desc: MesosDriverDescription): String = {
     val sId = desc.submissionId
     desc.retryState.map(state => sId + s"${RETRY_SEP}${state.retries.toString}").getOrElse(sId)
-  }
-
-  private def getRetryCountFromTaskId(taskId: String): Int = {
-    val parts = taskId.split(s"${RETRY_SEP}")
-    if (parts.length > 1) parts.last.toInt else 0
   }
 
   private def getSubmissionIdFromTaskId(taskId: String): String = {
@@ -770,8 +766,8 @@ private[spark] class MesosClusterScheduler(
         val state = launchedDrivers(subId)
         // Check if the driver is supervise enabled and can be relaunched.
         if (state.driverDescription.supervise && shouldRelaunch(status.getState)) {
-          if (taskIsOutdated(taskId, state)) {
-            // Early return to avoid outdated task from overwriting a more recent status
+          if (taskIsOutdated(taskId)) {
+            // Prevent outdated task from overwriting a more recent status
             return
           }
           removeFromLaunchedDrivers(subId)
@@ -796,10 +792,11 @@ private[spark] class MesosClusterScheduler(
     }
   }
 
-  private def taskIsOutdated(taskId: String, state: MesosClusterSubmissionState): Boolean = {
-    if (getRetryCountFromTaskId(taskId) < getRetryCountFromTaskId(state.frameworkId)) {
+  private def taskIsOutdated(taskId: String): Boolean = {
+    if (retriedDrivers.contains(taskId)) {
       true
     } else {
+      retriedDrivers.add(taskId)
       false
     }
   }
