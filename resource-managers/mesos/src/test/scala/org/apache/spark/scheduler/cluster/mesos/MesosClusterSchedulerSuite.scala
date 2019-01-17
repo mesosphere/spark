@@ -422,7 +422,7 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
   }
 
   test("does not restart outdated supervised drivers") {
-    // Covers scenarios where:
+    // Covers scenario where:
     // - agent goes down
     // - supervised job is relaunched on another agent
     // - first agent re-registers and sends status update: TASK_FAILED
