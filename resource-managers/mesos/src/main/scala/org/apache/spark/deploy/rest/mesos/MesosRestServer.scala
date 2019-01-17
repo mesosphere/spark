@@ -74,7 +74,9 @@ private[mesos] class MesosSubmitRequestServlet(
    * This does not currently consider fields used by python applications since python
    * is not supported in mesos cluster mode yet.
    */
-  private def buildDriverDescription(request: CreateSubmissionRequest): MesosDriverDescription = {
+  // Visible for testing.
+  private[rest] def buildDriverDescription(
+      request: CreateSubmissionRequest): MesosDriverDescription = {
     // Required fields, including the main class because python is not yet supported
     val appResource = Option(request.appResource).getOrElse {
       throw new SubmitRestMissingFieldException("Application jar 'appResource' is missing.")
@@ -101,11 +103,15 @@ private[mesos] class MesosSubmitRequestServlet(
     val name = request.sparkProperties.getOrElse("spark.app.name", mainClass)
 
     // Construct driver description
-    val conf = new SparkConf(false).setAll(sparkProperties)
+    val defaultConf = this.conf.getAllWithPrefix("spark.mesos.dispatcher.driverDefault.").toMap
+    val driverConf = new SparkConf(false)
+      .setAll(defaultConf)
+      .setAll(sparkProperties)
+
     val extraClassPath = driverExtraClassPath.toSeq.flatMap(_.split(File.pathSeparator))
     val extraLibraryPath = driverExtraLibraryPath.toSeq.flatMap(_.split(File.pathSeparator))
     val extraJavaOpts = driverExtraJavaOptions.map(Utils.splitCommandString).getOrElse(Seq.empty)
-    val sparkJavaOpts = Utils.sparkJavaOpts(conf)
+    val sparkJavaOpts = Utils.sparkJavaOpts(driverConf)
     val javaOpts = sparkJavaOpts ++ extraJavaOpts
     val command = new Command(
       mainClass, appArgs, environmentVariables, extraClassPath, extraLibraryPath, javaOpts)
@@ -117,7 +123,7 @@ private[mesos] class MesosSubmitRequestServlet(
 
     new MesosDriverDescription(
       name, appResource, actualDriverMemory, actualDriverCores, actualSuperviseDriver,
-      command, request.sparkProperties, submissionId, submitDate)
+      command, driverConf.getAll.toMap, submissionId, submitDate)
   }
 
   protected override def handleSubmit(

@@ -557,12 +557,13 @@ private[spark] class MesosClusterScheduler(
       "spark.submit.deployMode", // this would be set to `cluster`, but we need client
       "spark.master" // this contains the address of the dispatcher, not master
     )
-    val defaultConf = conf.getAllWithPrefix("spark.mesos.dispatcher.driverDefault.").toMap
-    val driverConf = desc.conf.getAll
+
+    desc.conf.getAll
       .filter { case (key, _) => !replicatedOptionsBlacklist.contains(key) }
       .toMap
-    (defaultConf ++ driverConf).foreach { case (key, value) =>
-      options ++= Seq("--conf", s"$key=${shellEscape(value)}") }
+      .foreach { case (key, value) =>
+        options ++= Seq("--conf", s"$key=${shellEscape(value)}")
+      }
 
     options
   }
