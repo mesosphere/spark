@@ -146,7 +146,6 @@ private[spark] class MesosClusterScheduler(
   private val pendingRecover = new mutable.HashMap[String, SlaveID]()
   // Stores all the submitted drivers that hasn't been launched, keyed by submission id
   private val queuedDrivers = new ArrayBuffer[MesosDriverDescription]()
-  private val retriedDrivers = new mutable.HashSet[String]()
   // All supervised drivers that are waiting to retry after termination, keyed by submission id
   private val pendingRetryDrivers = new ArrayBuffer[MesosDriverDescription]()
   private val queuedDriversState = engineFactory.createEngine("driverQueue")
@@ -766,7 +765,7 @@ private[spark] class MesosClusterScheduler(
         val state = launchedDrivers(subId)
         // Check if the driver is supervise enabled and can be relaunched.
         if (state.driverDescription.supervise && shouldRelaunch(status.getState)) {
-          if (taskIsOutdated(taskId)) {
+          if (taskIsOutdated(taskId, state)) {
             // Prevent outdated task from overwriting a more recent status
             return
           }
@@ -792,14 +791,8 @@ private[spark] class MesosClusterScheduler(
     }
   }
 
-  private def taskIsOutdated(taskId: String): Boolean = {
-    if (retriedDrivers.contains(taskId)) {
-      true
-    } else {
-      retriedDrivers.add(taskId)
-      false
-    }
-  }
+  private def taskIsOutdated(taskId: String, state: MesosClusterSubmissionState): Boolean =
+    taskId != state.taskId.getValue && !pendingRetryDrivers.contains(state.driverDescription)
 
   private def retireDriver(
       submissionId: String,
