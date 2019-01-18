@@ -791,6 +791,12 @@ private[spark] class MesosClusterScheduler(
     }
   }
 
+  /**
+   * Check if the task has already been launched or is pending
+   * If neither, the taskId is outdated and should be ignored
+   * This is to avoid scenarios where an outdated status update arrives
+   * after a supervised driver has already been relaunched
+   */
   private def taskIsOutdated(taskId: String, state: MesosClusterSubmissionState): Boolean =
     taskId != state.taskId.getValue && !pendingRetryDrivers.contains(state.driverDescription)
 
