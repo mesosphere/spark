@@ -522,8 +522,15 @@ private[spark] class MesosClusterScheduler(
     val builder = CommandInfo.newBuilder()
     builder.setValue(getDriverCommandValue(desc))
     builder.setEnvironment(getDriverEnvironment(desc))
+    builder.setUser(getUser(desc))
     builder.addAllUris(getDriverUris(desc).asJava)
     builder.build()
+  }
+
+  private def getUser(desc: MesosDriverDescription): String = {
+    desc.conf
+      .getOption("spark.mesos.driverEnv.SPARK_USER")
+      .getOrElse(Utils.getCurrentUserName())
   }
 
   private def generateCmdOption(desc: MesosDriverDescription, sandboxPath: String): Seq[String] = {
