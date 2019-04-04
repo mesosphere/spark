@@ -611,14 +611,12 @@ private[spark] class MesosClusterScheduler(
       partitionResources(remainingResources.asJava, "mem", desc.mem)
     offer.remainingResources = finalResources.asJava
 
-    val appName = desc.conf.get("spark.app.name")
-
     val driverLabels = MesosProtoUtils.mesosLabels(desc.conf.get(config.DRIVER_LABELS)
       .getOrElse(""))
 
     TaskInfo.newBuilder()
       .setTaskId(taskId)
-      .setName(s"Driver for ${appName}")
+      .setName(s"Driver for ${desc.name}")
       .setSlaveId(offer.offer.getSlaveId)
       .setCommand(buildDriverCommand(desc))
       .setContainer(getContainerInfo(desc))

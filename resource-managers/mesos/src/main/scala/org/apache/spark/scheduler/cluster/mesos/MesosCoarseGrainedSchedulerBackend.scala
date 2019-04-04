@@ -183,19 +183,12 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
 
   private val metricsSource = new MesosCoarseGrainedSchedulerSource(this)
 
-  private val schedulerUuid: String = UUID.randomUUID().toString
-
-  private var nextMesosTaskId = 0
-
   @volatile var appId: String = _
 
   private var schedulerDriver: SchedulerDriver = _
 
-  def newMesosTaskId(): String = {
-    val id = nextMesosTaskId
-    nextMesosTaskId += 1
-    id.toString
-  }
+  private val schedulerUuid: String = UUID.randomUUID().toString
+  private val nextExecutorNumber = new AtomicLong()
 
   override def start() {
     super.start()
@@ -528,7 +521,8 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
         if (canLaunchTask(slaveId, offer.getHostname, resources)) {
           // Create a task
           launchTasks = true
-          val taskId = newMesosTaskId()
+          val taskSeqNumber = nextExecutorNumber.getAndIncrement()
+          val taskId = s"${schedulerUuid}-$taskSeqNumber"
           val offerCPUs = getResource(resources, "cpus").toInt
           val offerGPUs = getResource(resources, "gpus").toInt
           var taskGPUs = executorGpus(offerGPUs)
@@ -541,10 +535,10 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
             partitionTaskResources(resources, taskCPUs, taskMemory, taskGPUs)
 
           val taskBuilder = MesosTaskInfo.newBuilder()
-            .setTaskId(TaskID.newBuilder().setValue( s"$schedulerUuid-$taskId").build())
+            .setTaskId(TaskID.newBuilder().setValue(taskId).build())
             .setSlaveId(offer.getSlaveId)
             .setCommand(createCommand(offer, taskCPUs + extraCoresPerExecutor, taskId))
-            .setName(s"${sc.appName} $taskId")
+            .setName(s"${sc.appName} $taskSeqNumber")
             .setLabels(MesosProtoUtils.mesosLabels(taskLabels))
             .addAllResources(resourcesToUse.asJava)
             .setContainer(getContainerInfo(sc.conf))
