@@ -76,15 +76,15 @@ private[spark] class MesosFineGrainedSchedulerBackend(
   override def start() {
     classLoader = Thread.currentThread.getContextClassLoader
     val driver = createSchedulerDriver(
-      master,
-      MesosFineGrainedSchedulerBackend.this,
-      sc.sparkUser,
-      sc.appName,
-      sc.conf,
-      sc.conf.getOption("spark.mesos.driver.webui.url").orElse(sc.ui.map(_.webUrl)),
-      Option.empty,
-      Option.empty,
-      sc.conf.getOption("spark.mesos.driver.frameworkId")
+      masterUrl = master,
+      scheduler = MesosFineGrainedSchedulerBackend.this,
+      sparkUser = sc.sparkUser,
+      appName = sc.appName,
+      conf = sc.conf,
+      webuiUrl = sc.conf.getOption("spark.mesos.driver.webui.url").orElse(sc.ui.map(_.webUrl)),
+      checkpoint = Option.empty,
+      failoverTimeout = Option.empty,
+      frameworkId = sc.conf.getOption("spark.mesos.driver.frameworkId")
     )
 
     unsetFrameworkID(sc)

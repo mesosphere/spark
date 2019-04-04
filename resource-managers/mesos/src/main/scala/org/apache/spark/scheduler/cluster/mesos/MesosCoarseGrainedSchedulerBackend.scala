@@ -215,15 +215,15 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
     }
 
     val driver = createSchedulerDriver(
-      master,
-      MesosCoarseGrainedSchedulerBackend.this,
-      sc.sparkUser,
-      sc.appName,
-      sc.conf,
-      sc.conf.getOption("spark.mesos.driver.webui.url").orElse(sc.ui.map(_.webUrl)),
-      None,
-      Some(sc.conf.get(DRIVER_FAILOVER_TIMEOUT)),
-      sc.conf.getOption("spark.mesos.driver.frameworkId").map(_ + suffix)
+      masterUrl = master,
+      scheduler = MesosCoarseGrainedSchedulerBackend.this,
+      sparkUser = sc.sparkUser,
+      appName = sc.appName,
+      conf = sc.conf,
+      webuiUrl = sc.conf.getOption("spark.mesos.driver.webui.url").orElse(sc.ui.map(_.webUrl)),
+      checkpoint = sc.conf.get(CHECKPOINT),
+      failoverTimeout = Some(sc.conf.get(DRIVER_FAILOVER_TIMEOUT)),
+      frameworkId = sc.conf.getOption("spark.mesos.driver.frameworkId").map(_ + suffix)
     )
 
     launcherBackend.setState(SparkAppHandle.State.SUBMITTED)
@@ -775,6 +775,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
       // removeExecutor() internally will send a message to the driver endpoint but
       // the driver endpoint is not available now, otherwise an exception will be thrown.
       if (!stopCalled) {
+        logInfo(s"Executor terminated, removing executor $taskId")
         removeExecutor(taskId, SlaveLost(reason))
       }
       slaves(slaveId).taskIDs.remove(taskId)

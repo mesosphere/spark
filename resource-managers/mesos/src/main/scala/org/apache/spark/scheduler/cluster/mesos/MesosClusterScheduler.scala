@@ -309,15 +309,15 @@ private[spark] class MesosClusterScheduler(
     metricsSystem.registerSource(metricsSource)
     metricsSystem.start()
     val driver = createSchedulerDriver(
-      master,
-      MesosClusterScheduler.this,
-      Utils.getCurrentUserName(),
-      appName,
-      conf,
-      Some(frameworkUrl),
-      Some(true),
-      Some(Integer.MAX_VALUE),
-      fwId)
+      masterUrl = master,
+      scheduler = MesosClusterScheduler.this,
+      sparkUser = Utils.getCurrentUserName(),
+      appName = appName,
+      conf = conf,
+      webuiUrl = Some(frameworkUrl),
+      checkpoint = Some(true),
+      failoverTimeout = Some(Integer.MAX_VALUE),
+      frameworkId = fwId)
 
     startScheduler(driver)
     ready = true
@@ -799,6 +799,7 @@ private[spark] class MesosClusterScheduler(
             // Prevent outdated task from overwriting a more recent status
             return
           }
+
           removeFromLaunchedDrivers(subId)
           state.finishDate = Some(new Date())
           val retryState: Option[MesosClusterRetryState] = state.driverDescription.retryState
