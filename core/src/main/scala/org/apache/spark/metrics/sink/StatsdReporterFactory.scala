@@ -17,26 +17,16 @@
 
 package org.apache.spark.metrics.sink
 
-import java.util.Properties
-
-import com.codahale.metrics.jmx.JmxReporter
+import io.dropwizard.metrics.BaseReporterFactory
 import com.codahale.metrics.MetricRegistry
+import com.codahale.metrics.ScheduledReporter
 
-import org.apache.spark.SecurityManager
-
-private[spark] class JmxSink(val property: Properties, val registry: MetricRegistry,
-    securityMgr: SecurityManager) extends Sink {
-
-  val reporter: JmxReporter = JmxReporter.forRegistry(registry).build()
-
-  override def start() {
-    reporter.start()
+private[spark] class StatsdReporterFactory extends BaseReporterFactory {
+  var host:String = StatsdSink.STATSD_DEFAULT_HOST
+  var port:Int = StatsdSink.STATSD_DEFAULT_PORT.toInt
+  var prefix:String = StatsdSink.STATSD_DEFAULT_PREFIX
+  
+  @Override def build(registry: MetricRegistry): ScheduledReporter = {
+    new StatsdReporter(registry, host, port, prefix, getFilter(), getRateUnit(), getDurationUnit())
   }
-
-  override def stop() {
-    reporter.stop()
-  }
-
-  override def report() { }
-
 }
