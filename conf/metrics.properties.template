@@ -119,13 +119,27 @@
 #   protocol  tcp           Protocol ("tcp" or "udp") to use
 
 # org.apache.spark.metrics.sink.StatsdSink
-#   Name:     Default:      Description:
-#   host      127.0.0.1     Hostname or IP of StatsD server
-#   port      8125          Port of StatsD server
-#   period    10            Poll period
-#   unit      seconds       Units of poll period
-#   prefix    EMPTY STRING  Prefix to prepend to metric name
-
+#   Name:                      Default:      Description:
+#   host                       127.0.0.1     Hostname or IP of StatsD server
+#   port                       8125          Port of StatsD server
+#   period                     10            Poll period
+#   unit                       seconds       Units of poll period
+#   prefix                     EMPTY STRING  Prefix to prepend to metric name
+#   excludes                   EMPTY STRING  Comma separated list of Metrics to exclude from reports,
+#                                            by name. When defined matching metrics will not be reported.
+#   includes                   EMPTY STRING  Comma separated list of Metrics to include in reports,
+#                                            by name. When defined, only these metrics will be reported.
+#   excludesAttributes         EMPTY STRING  Comma separated list of metrics attributes to exclude from
+#                                             reports, by name (e.g. p98,m15_rate,stddev). When defined,
+#                                             matching metrics attributes will not be reported.
+#   includesAttributes         EMPTY STRING  Comma separated list of metrics attributes to include in
+#                                            reports, by name (e.g. p98,m15_rate,stddev). When defined,
+#                                            only these attributes will be reported.
+#   useRegexFilters            false         Indicates whether the values of the 'includes' and 'excludes'
+#                                            fields should be treated as regular expressions or not.
+#   useSubstringMatching       false         Uses a substring matching strategy to determine whether a
+#                                            metric should be processed.
+                                            
 ## Examples
 # Enable JmxSink for all instances by class name
 #*.sink.jmx.class=org.apache.spark.metrics.sink.JmxSink
