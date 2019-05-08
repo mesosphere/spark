@@ -69,9 +69,13 @@ private[spark] class StatsdSink(
 
   val reporterFactory = new StatsdReporterFactory()
 
-  reporterFactory.host = property.getProperty(STATSD_KEY_HOST, STATSD_DEFAULT_HOST)
-  reporterFactory.port = property.getProperty(STATSD_KEY_PORT, STATSD_DEFAULT_PORT).toInt
-  reporterFactory.prefix = property.getProperty(STATSD_KEY_PREFIX, STATSD_DEFAULT_PREFIX)
+  val host = property.getProperty(STATSD_KEY_HOST, STATSD_DEFAULT_HOST)
+  val port = property.getProperty(STATSD_KEY_PORT, STATSD_DEFAULT_PORT).toInt
+  val prefix = property.getProperty(STATSD_KEY_PREFIX, STATSD_DEFAULT_PREFIX)
+  
+  reporterFactory.host = host
+  reporterFactory.port = port
+  reporterFactory.prefix = prefix
 
   val pollPeriod = property.getProperty(STATSD_KEY_PERIOD, STATSD_DEFAULT_PERIOD).toInt
   val pollUnit =
@@ -79,22 +83,22 @@ private[spark] class StatsdSink(
 
   val excludes = property.getProperty(STATSD_KEY_EXCLUDES, STATSD_DEFAULT_EXCLUDES)
   if(!excludes.isEmpty()) {
-    reporterFactory.setExcludes(ImmutableSet.copyOf(excludes.split(",")))
+    reporterFactory.setExcludes(parseMetricsString(excludes))
   }
 
   val includes = property.getProperty(STATSD_KEY_INCLUDES, STATSD_DEFAULT_INCLUDES)
   if(!includes.isEmpty()) {
-    reporterFactory.setIncludes(ImmutableSet.copyOf(includes.split(",")))
+    reporterFactory.setIncludes(parseMetricsString(includes))
   }
 
   val excludesAttributes = property.getProperty(STATSD_KEY_EXCLUDES_ATTRIBUTES, STATSD_DEFAULT_EXCLUDES_ATTRIBUTES).toUpperCase
   if(!excludesAttributes.isEmpty()) {
-    reporterFactory.setExcludesAttributes(EnumSet.copyOf(excludesAttributes.split(",").map(attr => MetricAttribute.valueOf(attr)).toList.asJava))
+    reporterFactory.setExcludesAttributes(parseAttributesString(excludesAttributes))
   }
 
   val includesAttributes = property.getProperty(STATSD_KEY_INCLUDES_ATTRIBUTES, STATSD_DEFAULT_INCLUDES_ATTRIBUTES).toUpperCase
   if(!includesAttributes.isEmpty()) {
-    reporterFactory.setIncludesAttributes(EnumSet.copyOf(includesAttributes.split(",").map(attr => MetricAttribute.valueOf(attr)).toList.asJava))
+    reporterFactory.setIncludesAttributes(parseAttributesString(includesAttributes))
   }
 
   val useRegexFilter = property.getProperty(STATSD_KEY_USE_REGEX_FILTERS, STATSD_DEFAULT_USE_REGEX_FILTERS).toBoolean
@@ -109,7 +113,7 @@ private[spark] class StatsdSink(
 
   override def start(): Unit = {
     reporter.start(pollPeriod, pollUnit)
-    logInfo(s"StatsdSink started with prefix: '$reporterFactory.prefix'")
+    logInfo(s"StatsdSink started with prefix: '$prefix'")
   }
 
   override def stop(): Unit = {
@@ -118,5 +122,17 @@ private[spark] class StatsdSink(
   }
 
   override def report(): Unit = reporter.report()
+  
+  def parseMetricsString(metricsString: String): ImmutableSet[String] = { 
+    ImmutableSet.copyOf(metricsString.split(","))
+  }
+  
+  def parseAttributesString(attributesString: String): EnumSet[MetricAttribute] = {
+    EnumSet.copyOf(
+        attributesString.split(",")
+        .map(attr => MetricAttribute.valueOf(attr))
+        .toList
+        .asJava)
+  }
 }
 
