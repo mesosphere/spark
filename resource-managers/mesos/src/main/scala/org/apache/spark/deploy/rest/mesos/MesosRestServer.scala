@@ -67,6 +67,10 @@ private[mesos] class MesosSubmitRequestServlet(
   private def newDriverId(submitDate: Date): String =
     f"driver-${createDateFormat.format(submitDate)}-${nextDriverNumber.incrementAndGet()}%04d"
 
+  // These defaults copied from YARN
+  private val MEMORY_OVERHEAD_FACTOR = 0.10
+  private val MEMORY_OVERHEAD_MIN = 384
+  
   /**
    * Build a driver description from the fields specified in the submit request.
    *
@@ -99,6 +103,7 @@ private[mesos] class MesosSubmitRequestServlet(
     val driverExtraLibraryPath = sparkProperties.get("spark.driver.extraLibraryPath")
     val superviseDriver = sparkProperties.get("spark.driver.supervise")
     val driverMemory = sparkProperties.get("spark.driver.memory")
+    val driverMemoryOverhead = sparkProperties.get("spark.driver.memoryOverhead")
     val driverCores = sparkProperties.get("spark.driver.cores")
     val name = request.sparkProperties.getOrElse("spark.app.name", mainClass)
 
@@ -117,13 +122,15 @@ private[mesos] class MesosSubmitRequestServlet(
       mainClass, appArgs, environmentVariables, extraClassPath, extraLibraryPath, javaOpts)
     val actualSuperviseDriver = superviseDriver.map(_.toBoolean).getOrElse(DEFAULT_SUPERVISE)
     val actualDriverMemory = driverMemory.map(Utils.memoryStringToMb).getOrElse(DEFAULT_MEMORY)
+    val actualDriverMemoryOverhead = driverMemoryOverhead.map(_.toInt).getOrElse(
+      math.max((MEMORY_OVERHEAD_FACTOR * actualDriverMemory).toInt, MEMORY_OVERHEAD_MIN))
     val actualDriverCores = driverCores.map(_.toDouble).getOrElse(DEFAULT_CORES)
     val submitDate = new Date()
     val submissionId = newDriverId(submitDate)
 
     new MesosDriverDescription(
-      name, appResource, actualDriverMemory, actualDriverCores, actualSuperviseDriver,
-      command, driverConf.getAll.toMap, submissionId, submitDate)
+      name, appResource, actualDriverMemory + actualDriverMemoryOverhead, actualDriverCores, 
+      actualSuperviseDriver, command, driverConf.getAll.toMap, submissionId, submitDate)
   }
 
   protected override def handleSubmit(
