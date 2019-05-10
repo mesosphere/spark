@@ -145,7 +145,7 @@ private[deploy] class Master(
 
     if (restServerEnabled) {
       val port = conf.getInt("spark.master.rest.port", 6066)
-      restServer = Some(new StandaloneRestServer(address.host, port, conf, self, masterUrl))
+      restServer = Some(new StandaloneRestServer(address.host, port, securityMgr, conf, self, masterUrl))
     }
     restServerBoundPort = restServer.map(_.start())
 

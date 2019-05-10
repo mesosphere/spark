@@ -20,17 +20,19 @@ package org.apache.spark.deploy.rest
 import javax.servlet.http.{HttpServlet, HttpServletRequest, HttpServletResponse}
 
 import scala.io.Source
+import scala.collection.mutable.ArrayBuffer
 
 import com.fasterxml.jackson.core.JsonProcessingException
-import org.eclipse.jetty.server.{HttpConnectionFactory, Server, ServerConnector}
-import org.eclipse.jetty.servlet.{ServletContextHandler, ServletHolder}
-import org.eclipse.jetty.util.thread.{QueuedThreadPool, ScheduledExecutorScheduler}
+import org.eclipse.jetty.servlet.ServletContextHandler
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
 
 import org.apache.spark.{SPARK_VERSION => sparkVersion, SparkConf}
 import org.apache.spark.internal.Logging
+import org.apache.spark.ui.JettyUtils._
 import org.apache.spark.util.Utils
+import org.apache.spark.SSLOptions
+import org.apache.spark.ui.ServerInfo
 
 /**
  * A server that responds to requests submitted by the [[RestSubmissionClient]].
@@ -50,12 +52,13 @@ import org.apache.spark.util.Utils
 private[spark] abstract class RestSubmissionServer(
     val host: String,
     val requestedPort: Int,
+    val sslOptions: SSLOptions,
     val masterConf: SparkConf) extends Logging {
   protected val submitRequestServlet: SubmitRequestServlet
   protected val killRequestServlet: KillRequestServlet
   protected val statusRequestServlet: StatusRequestServlet
-
-  private var _server: Option[Server] = None
+  
+  protected var _serverInfo: Option[ServerInfo] = None
 
   // A mapping from URL prefixes to servlets that serve them. Exposed for testing.
   protected val baseContext = s"/${RestSubmissionServer.PROTOCOL_VERSION}/submissions"
@@ -68,8 +71,8 @@ private[spark] abstract class RestSubmissionServer(
 
   /** Start the server and return the bound port. */
   def start(): Int = {
-    val (server, boundPort) = Utils.startServiceOnPort[Server](requestedPort, doStart, masterConf)
-    _server = Some(server)
+    val (serverInfo, boundPort) = doStart(requestedPort)
+    _serverInfo = Some(serverInfo)
     logInfo(s"Started REST server for submitting applications on port $boundPort")
     boundPort
   }
@@ -78,39 +81,20 @@ private[spark] abstract class RestSubmissionServer(
    * Map the servlets to their corresponding contexts and attach them to a server.
    * Return a 2-tuple of the started server and the bound port.
    */
-  private def doStart(startPort: Int): (Server, Int) = {
-    val threadPool = new QueuedThreadPool
-    threadPool.setDaemon(true)
-    val server = new Server(threadPool)
-
-    val connector = new ServerConnector(
-      server,
-      null,
-      // Call this full constructor to set this, which forces daemon threads:
-      new ScheduledExecutorScheduler("RestSubmissionServer-JettyScheduler", true),
-      null,
-      -1,
-      -1,
-      new HttpConnectionFactory())
-    connector.setHost(host)
-    connector.setPort(startPort)
-    connector.setReuseAddress(!Utils.isWindows)
-    server.addConnector(connector)
-
-    val mainHandler = new ServletContextHandler
-    mainHandler.setServer(server)
-    mainHandler.setContextPath("/")
+  private def doStart(startPort: Int): (ServerInfo, Int) = {
+    val handlers = ArrayBuffer[ServletContextHandler]()
+    
     contextToServlet.foreach { case (prefix, servlet) =>
-      mainHandler.addServlet(new ServletHolder(servlet), prefix)
+      handlers += createServletHandler(prefix, servlet, "")
     }
-    server.setHandler(mainHandler)
-    server.start()
-    val boundPort = connector.getLocalPort
-    (server, boundPort)
+    
+    val serverInfo = startJettyServer(host, startPort, sslOptions, handlers, masterConf)
+    
+    (serverInfo, serverInfo.boundPort)
   }
 
   def stop(): Unit = {
-    _server.foreach(_.stop())
+    _serverInfo.foreach(_.stop())
   }
 }
 
