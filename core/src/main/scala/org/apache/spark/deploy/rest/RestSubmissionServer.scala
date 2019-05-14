@@ -19,8 +19,8 @@ package org.apache.spark.deploy.rest
 
 import javax.servlet.http.{HttpServlet, HttpServletRequest, HttpServletResponse}
 
-import scala.io.Source
 import scala.collection.mutable.ArrayBuffer
+import scala.io.Source
 
 import com.fasterxml.jackson.core.JsonProcessingException
 import org.eclipse.jetty.servlet.ServletContextHandler
@@ -28,11 +28,11 @@ import org.json4s._
 import org.json4s.jackson.JsonMethods._
 
 import org.apache.spark.{SPARK_VERSION => sparkVersion, SparkConf}
+import org.apache.spark.SSLOptions
 import org.apache.spark.internal.Logging
 import org.apache.spark.ui.JettyUtils._
-import org.apache.spark.util.Utils
-import org.apache.spark.SSLOptions
 import org.apache.spark.ui.ServerInfo
+import org.apache.spark.util.Utils
 
 /**
  * A server that responds to requests submitted by the [[RestSubmissionClient]].
@@ -57,7 +57,7 @@ private[spark] abstract class RestSubmissionServer(
   protected val submitRequestServlet: SubmitRequestServlet
   protected val killRequestServlet: KillRequestServlet
   protected val statusRequestServlet: StatusRequestServlet
-  
+
   protected var _serverInfo: Option[ServerInfo] = None
 
   // A mapping from URL prefixes to servlets that serve them. Exposed for testing.
@@ -83,13 +83,13 @@ private[spark] abstract class RestSubmissionServer(
    */
   private def doStart(startPort: Int): (ServerInfo, Int) = {
     val handlers = ArrayBuffer[ServletContextHandler]()
-    
+
     contextToServlet.foreach { case (prefix, servlet) =>
       handlers += createServletHandler(prefix, servlet, "")
     }
-    
+
     val serverInfo = startJettyServer(host, startPort, sslOptions, handlers, masterConf)
-    
+
     (serverInfo, serverInfo.boundPort)
   }
 

@@ -421,9 +421,13 @@ class StandaloneRestSubmitSuite extends SparkFunSuite with BeforeAndAfterEach {
     val fakeMasterRef = _rpcEnv.setupEndpoint("fake-master", makeFakeMaster(_rpcEnv))
     val _server =
       if (faulty) {
-        new FaultyStandaloneRestServer(localhost, 0, securityManager, conf, fakeMasterRef, "spark://fake:7077")
+        new FaultyStandaloneRestServer(
+          localhost, 0, securityManager,
+          conf, fakeMasterRef, "spark://fake:7077")
       } else {
-        new StandaloneRestServer(localhost, 0, securityManager, conf, fakeMasterRef, "spark://fake:7077")
+        new StandaloneRestServer(
+          localhost, 0, securityManager,
+          conf, fakeMasterRef, "spark://fake:7077")
       }
     val port = _server.start()
     // set these to clean them up after every test
@@ -589,7 +593,8 @@ private class FaultyStandaloneRestServer(
     masterConf: SparkConf,
     masterEndpoint: RpcEndpointRef,
     masterUrl: String)
-  extends RestSubmissionServer(host, requestedPort, securityManager.getSSLOptions("standalone"), masterConf) {
+  extends RestSubmissionServer(
+    host, requestedPort, securityManager.getSSLOptions("standalone"), masterConf) {
 
   protected override val submitRequestServlet = new MalformedSubmitServlet
   protected override val killRequestServlet = new InvalidKillServlet
