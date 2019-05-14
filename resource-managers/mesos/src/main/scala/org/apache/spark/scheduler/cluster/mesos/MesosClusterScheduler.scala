@@ -23,16 +23,15 @@ import java.util.{Collections, Date, List => JList}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-
 import org.apache.mesos.{Scheduler, SchedulerDriver}
 import org.apache.mesos.Protos.{TaskState => MesosTaskState, _}
 import org.apache.mesos.Protos.Environment.Variable
 import org.apache.mesos.Protos.TaskStatus.Reason
-
-import org.apache.spark.{SecurityManager, SparkConf, SparkException, TaskState}
-import org.apache.spark.deploy.mesos.{config, MesosDriverDescription}
+import org.apache.spark.{SecurityManager, SparkConf, SparkEnv, SparkException, TaskState}
+import org.apache.spark.deploy.mesos.{MesosDriverDescription, config}
 import org.apache.spark.deploy.rest.{CreateSubmissionResponse, KillSubmissionResponse, SubmissionStatusResponse}
 import org.apache.spark.metrics.MetricsSystem
+import org.apache.spark.metrics.source.JvmSource
 import org.apache.spark.util.Utils
 
 /**
@@ -122,9 +121,9 @@ private[spark] class MesosClusterScheduler(
     conf: SparkConf)
   extends Scheduler with MesosSchedulerUtils {
   var frameworkUrl: String = _
-  private val metricsSource = new MesosClusterSchedulerSource(this)
+  private val mesosClusterSchedulerMetricsSource = new MesosClusterSchedulerSource(this)
   private val metricsSystem =
-    MetricsSystem.createMetricsSystem(metricsSource.sourceName, conf, new SecurityManager(conf))
+    MetricsSystem.createMetricsSystem("dispatcher", conf, new SecurityManager(conf))
   private val master = conf.get("spark.master")
   private val appName = conf.get("spark.app.name")
   private val queuedCapacity = conf.getInt("spark.mesos.maxDrivers", 200)
@@ -306,7 +305,7 @@ private[spark] class MesosClusterScheduler(
       frameworkId = id
     }
     recoverState()
-    metricsSystem.registerSource(metricsSource)
+    metricsSystem.registerSource(mesosClusterSchedulerMetricsSource)
     metricsSystem.start()
     val driver = createSchedulerDriver(
       masterUrl = master,
@@ -667,14 +666,14 @@ private[spark] class MesosClusterScheduler(
             new Date(),
             None,
             getDriverFrameworkID(submission))
-          metricsSource.recordLaunchedDriver(submission)
+          mesosClusterSchedulerMetricsSource.recordLaunchedDriver(submission)
           launchedDrivers(submission.submissionId) = newState
           launchedDriversState.persist(submission.submissionId, newState)
           afterLaunchCallback(submission.submissionId)
         } catch {
           case e: SparkException =>
             afterLaunchCallback(submission.submissionId)
-            metricsSource.recordExceptionDriver(submission)
+            mesosClusterSchedulerMetricsSource.recordExceptionDriver(submission)
             finishedDrivers += new MesosClusterSubmissionState(
               submission,
               TaskID.newBuilder().setValue(submission.submissionId).build(),
@@ -807,10 +806,10 @@ private[spark] class MesosClusterScheduler(
           val nextRetry = new Date(new Date().getTime + waitTimeSec * 1000L)
           val newDriverDescription = state.driverDescription.copy(
             retryState = Some(new MesosClusterRetryState(status, retries, nextRetry, waitTimeSec)))
-          metricsSource.recordRetryingDriver(state)
+          mesosClusterSchedulerMetricsSource.recordRetryingDriver(state)
           addDriverToPending(newDriverDescription, newDriverDescription.submissionId)
         } else if (TaskState.isFinished(mesosToTaskState(status.getState))) {
-          metricsSource.recordFinishedDriver(state, status.getState)
+          mesosClusterSchedulerMetricsSource.recordFinishedDriver(state, status.getState)
           retireDriver(subId, state)
         }
         state.mesosTaskStatus = Option(status)
@@ -891,7 +890,7 @@ private[spark] class MesosClusterScheduler(
 
   private def addDriverToQueue(desc: MesosDriverDescription): Unit = {
     queuedDriversState.persist(desc.submissionId, desc)
-    metricsSource.recordQueuedDriver()
+    mesosClusterSchedulerMetricsSource.recordQueuedDriver()
     queuedDrivers += desc
     revive()
   }

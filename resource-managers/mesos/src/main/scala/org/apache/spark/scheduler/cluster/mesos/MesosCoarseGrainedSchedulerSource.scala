@@ -34,7 +34,7 @@ private[mesos] class MesosCoarseGrainedSchedulerSource(
   scheduler: MesosCoarseGrainedSchedulerBackend)
     extends Source with MesosSchedulerUtils {
 
-  override val sourceName: String = "mesos_cluster"
+  override val sourceName: String = "mesos"
   override val metricRegistry: MetricRegistry = new MetricRegistry
 
   // EXECUTOR STATE POLLING METRICS:
@@ -42,37 +42,37 @@ private[mesos] class MesosCoarseGrainedSchedulerSource(
   // task states.
 
   // Number of CPUs used
-  metricRegistry.register(MetricRegistry.name("executor", "resource", "cores"), new Gauge[Double] {
+  metricRegistry.register(MetricRegistry.name("resource", "cores"), new Gauge[Double] {
     override def getValue: Double = scheduler.getCoresUsed
   })
   // Number of CPUs vs max
   if (scheduler.getMaxCores != 0) {
-    metricRegistry.register(MetricRegistry.name("executor", "resource", "cores_of_max"),
+    metricRegistry.register(MetricRegistry.name("resource", "cores_of_max"),
       new Gauge[Double] {
         // Note: See above div0 check before calling register()
         override def getValue: Double = scheduler.getCoresUsed / scheduler.getMaxCores
       })
   }
   // Number of CPUs per task
-  metricRegistry.register(MetricRegistry.name("executor", "resource", "mean_cores_per_task"),
+  metricRegistry.register(MetricRegistry.name("resource", "mean_cores_per_task"),
     new Gauge[Double] {
       override def getValue: Double = scheduler.getMeanCoresPerTask
     })
 
   // Number of GPUs used
-  metricRegistry.register(MetricRegistry.name("executor", "resource", "gpus"), new Gauge[Double] {
+  metricRegistry.register(MetricRegistry.name("resource", "gpus"), new Gauge[Double] {
     override def getValue: Double = scheduler.getGpusUsed
   })
   // Number of GPUs vs max
   if (scheduler.getMaxGpus != 0) {
-    metricRegistry.register(MetricRegistry.name("executor", "resource", "gpus_of_max"),
+    metricRegistry.register(MetricRegistry.name("resource", "gpus_of_max"),
       new Gauge[Double] {
         // Note: See above div0 check before calling register()
         override def getValue: Double = scheduler.getGpusUsed / scheduler.getMaxGpus
       })
   }
   // Number of GPUs per task
-  metricRegistry.register(MetricRegistry.name("executor", "resource", "mean_gpus_per_task"),
+  metricRegistry.register(MetricRegistry.name("resource", "mean_gpus_per_task"),
     new Gauge[Double] {
       override def getValue: Double = scheduler.getMeanGpusPerTask
     })
@@ -84,7 +84,7 @@ private[mesos] class MesosCoarseGrainedSchedulerSource(
   // Number of tasks vs max
   if (scheduler.isExecutorLimitEnabled) {
     // executorLimit is assigned asynchronously, so it may start off with a zero value.
-    metricRegistry.register(MetricRegistry.name("executor", "count_of_max"), new Gauge[Int] {
+    metricRegistry.register(MetricRegistry.name("count_of_max"), new Gauge[Int] {
       override def getValue: Int = {
         if (scheduler.getExecutorLimit == 0) {
           0
@@ -95,19 +95,19 @@ private[mesos] class MesosCoarseGrainedSchedulerSource(
     })
   }
   // Number of task failures
-  metricRegistry.register(MetricRegistry.name("executor", "failures"), new Gauge[Int] {
+  metricRegistry.register(MetricRegistry.name("failures"), new Gauge[Int] {
     override def getValue: Int = scheduler.getTaskFailureCount
   })
   // Number of tracked agents regardless of whether we're currently present on them
-  metricRegistry.register(MetricRegistry.name("executor", "known_agents"), new Gauge[Int] {
+  metricRegistry.register(MetricRegistry.name("known_agents"), new Gauge[Int] {
     override def getValue: Int = scheduler.getKnownAgentsCount
   })
   // Number of tracked agents with tasks on them
-  metricRegistry.register(MetricRegistry.name("executor", "occupied_agents"), new Gauge[Int] {
+  metricRegistry.register(MetricRegistry.name("occupied_agents"), new Gauge[Int] {
     override def getValue: Int = scheduler.getOccupiedAgentsCount
   })
   // Number of blacklisted agents (too many failures)
-  metricRegistry.register(MetricRegistry.name("executor", "blacklisted_agents"), new Gauge[Int] {
+  metricRegistry.register(MetricRegistry.name("blacklisted_agents"), new Gauge[Int] {
     override def getValue: Int = scheduler.getBlacklistedAgentCount
   })
 
@@ -116,63 +116,63 @@ private[mesos] class MesosCoarseGrainedSchedulerSource(
 
   // Rate of offers received (total number of offers, not offer RPCs)
   private val offerCounter =
-    metricRegistry.counter(MetricRegistry.name("executor", "mesos", "offer"))
+    metricRegistry.counter(MetricRegistry.name("offers", "received"))
   // Rate of all offers declined, sum of the following reasons for declines
   private val declineCounter =
-    metricRegistry.counter(MetricRegistry.name("executor", "mesos", "decline"))
+    metricRegistry.counter(MetricRegistry.name("offers", "declined"))
   // Offers declined for unmet requirements (with RejectOfferDurationForUnmetConstraints)
   private val declineUnmetCounter =
-    metricRegistry.counter(MetricRegistry.name("executor", "mesos", "decline_unmet"))
+    metricRegistry.counter(MetricRegistry.name("offers", "declined_unmet"))
   // Offers declined when the deployment is finished (with RejectOfferDurationForReachedMaxCores)
   private val declineFinishedCounter =
-    metricRegistry.counter(MetricRegistry.name("executor", "mesos", "decline_finished"))
+    metricRegistry.counter(MetricRegistry.name("offers", "declined_finished"))
   // Offers declined when offers are being unused (no duration in the decline filter)
   private val declineUnusedCounter =
-    metricRegistry.counter(MetricRegistry.name("executor", "mesos", "decline_unused"))
+    metricRegistry.counter(MetricRegistry.name("offers", "declined_unused"))
   // Rate of revive operations
   private val reviveCounter =
-    metricRegistry.counter(MetricRegistry.name("executor", "mesos", "revive"))
+    metricRegistry.counter(MetricRegistry.name("offers", "revived"))
   // Rate of launch operations
   private val launchCounter =
-    metricRegistry.counter(MetricRegistry.name("executor", "mesos", "launch"))
+    metricRegistry.counter(MetricRegistry.name("offers", "launched"))
 
   // Counters for Spark states on launched executors (LAUNCHING, RUNNING, ...)
   private val sparkStateCounters = TaskState.values
     .map(state => (state, metricRegistry.counter(
-      MetricRegistry.name("executor", "spark_state", state.toString.toLowerCase))))
+      MetricRegistry.name("spark_state", state.toString.toLowerCase))))
     .toMap
   private val sparkUnknownStateCounter =
-    metricRegistry.counter(MetricRegistry.name("executor", "spark_state", "UNKNOWN"))
+    metricRegistry.counter(MetricRegistry.name("spark_state", "UNKNOWN"))
   // Counters for Mesos states on launched executors (TASK_RUNNING, TASK_LOST, ...),
   // more granular than sparkStateCounters
   private val mesosStateCounters = MesosTaskState.values
     .map(state => (state, metricRegistry.counter(
-      MetricRegistry.name("executor", "mesos_state", state.name.toLowerCase))))
+      MetricRegistry.name("mesos_state", state.name.toLowerCase))))
     .toMap
   private val mesosUnknownStateCounter =
-    metricRegistry.counter(MetricRegistry.name("executor", "mesos_state", "UNKNOWN"))
+    metricRegistry.counter(MetricRegistry.name("mesos_state", "UNKNOWN"))
 
   // TASK TIMER METRICS:
   // These metrics measure the duration to launch and run executors
 
   // Duration from driver start to the first task launching.
   private val startToFirstLaunched =
-    metricRegistry.timer(MetricRegistry.name("executor", "start_to_first_launched"))
+    metricRegistry.timer(MetricRegistry.name("start_to_first_launched"))
   // Duration from driver start to the first task running.
   private val startToFirstRunning =
-    metricRegistry.timer(MetricRegistry.name("executor", "start_to_first_running"))
+    metricRegistry.timer(MetricRegistry.name("start_to_first_running"))
 
   // Duration from driver start to maxCores footprint being filled
   private val startToAllLaunched =
-    metricRegistry.timer(MetricRegistry.name("executor", "start_to_all_launched"))
+    metricRegistry.timer(MetricRegistry.name("start_to_all_launched"))
 
   // Duration between an executor launch and the executor entering a given spark state, e.g. RUNNING
   private val launchToSparkStateTimers = TaskState.values
     .map(state => (state, metricRegistry.timer(
-      MetricRegistry.name("executor", "launch_to_spark_state", state.toString.toLowerCase))))
+      MetricRegistry.name("launch_to_spark_state", state.toString.toLowerCase))))
     .toMap
   private val launchToUnknownSparkStateTimer = metricRegistry.timer(
-    MetricRegistry.name("executor", "launch_to_spark_state", "UNKNOWN"))
+    MetricRegistry.name("launch_to_spark_state", "UNKNOWN"))
 
   // Time that the scheduler was initialized. This is the 'start time'.
   private val schedulerInitTime = new Date
