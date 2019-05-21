@@ -33,6 +33,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.ui.JettyUtils._
 import org.apache.spark.ui.ServerInfo
 import org.apache.spark.util.Utils
+import org.eclipse.jetty.servlet.ServletHolder
 
 /**
  * A server that responds to requests submitted by the [[RestSubmissionClient]].
@@ -83,10 +84,13 @@ private[spark] abstract class RestSubmissionServer(
    */
   private def doStart(startPort: Int): (ServerInfo, Int) = {
     val handlers = ArrayBuffer[ServletContextHandler]()
+    val contextHandler = new ServletContextHandler
+    contextHandler.setContextPath("/")
 
     contextToServlet.foreach { case (prefix, servlet) =>
-      handlers += createServletHandler(prefix, servlet, "")
+      contextHandler.addServlet(new ServletHolder(servlet), prefix)
     }
+    handlers += contextHandler
 
     val serverInfo = startJettyServer(host, startPort, sslOptions, handlers, masterConf)
 
