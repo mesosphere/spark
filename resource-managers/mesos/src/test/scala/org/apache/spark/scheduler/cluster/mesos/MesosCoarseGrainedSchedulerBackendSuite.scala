@@ -108,7 +108,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     verifyTaskLaunched(driver, "o2")
   }
 
-  test("mesos declines offers from blacklisted slave") {
+  test("mesos declines offers from blacklisted slave and keeps failure tasks count") {
     setBackend()
 
     // launches a task on a valid offer on slave s1
@@ -128,6 +128,8 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     offerResources(List(offer2))
     // but since it's blacklisted the offer is declined
     verifyDeclinedOffer(driver, createOfferId("o1"))
+    assert(backend.getBlacklistedAgentCount() == 1)
+    assert(backend.getTaskFailureCount() == 1)
   }
 
   test("mesos supports spark.executor.cores") {
