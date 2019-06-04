@@ -21,7 +21,7 @@ import org.mockito.Mockito.mock
 
 import org.apache.spark.{SparkConf, SparkFunSuite}
 import org.apache.spark.deploy.TestPrematureExit
-import org.apache.spark.deploy.rest.CreateSubmissionRequest
+import org.apache.spark.deploy.rest.{CreateSubmissionRequest, SubmitRestProtocolException}
 import org.apache.spark.scheduler.cluster.mesos.MesosClusterScheduler
 
 class MesosSubmitRequestServletSuite extends SparkFunSuite
@@ -49,5 +49,25 @@ class MesosSubmitRequestServletSuite extends SparkFunSuite
 
     assert("test_network" == driverConf.get("spark.mesos.network.name"))
     assert("k0:v0,k1:v1" == driverConf.get("spark.mesos.network.labels"))
+  }
+
+  test("test a job with malformed labels is not submitted") {
+    val conf = new SparkConf(loadDefaults = false)
+
+    val submitRequestServlet = new MesosSubmitRequestServlet(
+      scheduler = mock(classOf[MesosClusterScheduler]),
+      conf
+    )
+
+    val request = new CreateSubmissionRequest
+    request.appResource = "hdfs://test.jar"
+    request.mainClass = "foo.Bar"
+    request.appArgs = Array.empty[String]
+    request.sparkProperties = Map("spark.mesos.network.labels" -> "k0,k1:v1") // malformed label
+    request.environmentVariables = Map.empty[String, String]
+
+    assertThrows[SubmitRestProtocolException] {
+      submitRequestServlet.buildDriverDescription(request)
+    }
   }
 }

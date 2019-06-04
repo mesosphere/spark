@@ -679,7 +679,7 @@ private[spark] class MesosClusterScheduler(
               TaskID.newBuilder().setValue(submission.submissionId).build(),
               SlaveID.newBuilder().setValue("").build(),
               None,
-              null,
+              new Date(),
               None,
               getDriverFrameworkID(submission))
             logError(s"Failed to launch the driver with id: ${submission.submissionId}, " +

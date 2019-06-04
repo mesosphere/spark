@@ -26,8 +26,8 @@ import javax.servlet.http.HttpServletResponse
 import org.apache.spark.{SPARK_VERSION => sparkVersion, SecurityManager, SparkConf}
 import org.apache.spark.deploy.Command
 import org.apache.spark.deploy.mesos.MesosDriverDescription
-import org.apache.spark.deploy.rest._
-import org.apache.spark.scheduler.cluster.mesos.MesosClusterScheduler
+import org.apache.spark.deploy.rest.{SubmitRestProtocolException, _}
+import org.apache.spark.scheduler.cluster.mesos.{MesosClusterScheduler, MesosProtoUtils}
 import org.apache.spark.util.Utils
 
 /**
@@ -71,7 +71,7 @@ private[mesos] class MesosSubmitRequestServlet(
   // These defaults copied from YARN
   private val MEMORY_OVERHEAD_FACTOR = 0.10
   private val MEMORY_OVERHEAD_MIN = 384
-  
+
   /**
    * Build a driver description from the fields specified in the submit request.
    *
@@ -108,6 +108,8 @@ private[mesos] class MesosSubmitRequestServlet(
     val driverCores = sparkProperties.get("spark.driver.cores")
     val name = request.sparkProperties.getOrElse("spark.app.name", mainClass)
 
+    validateLabelsFormat(sparkProperties)
+
     // Construct driver description
     val defaultConf = this.conf.getAllWithPrefix("spark.mesos.dispatcher.driverDefault.").toMap
     val driverConf = new SparkConf(false)
@@ -130,7 +132,7 @@ private[mesos] class MesosSubmitRequestServlet(
     val submissionId = newDriverId(submitDate)
 
     new MesosDriverDescription(
-      name, appResource, actualDriverMemory + actualDriverMemoryOverhead, actualDriverCores, 
+      name, appResource, actualDriverMemory + actualDriverMemoryOverhead, actualDriverCores,
       actualSuperviseDriver, command, driverConf.getAll.toMap, submissionId, submitDate)
   }
 
@@ -140,18 +142,38 @@ private[mesos] class MesosSubmitRequestServlet(
       responseServlet: HttpServletResponse): SubmitRestProtocolResponse = {
     requestMessage match {
       case submitRequest: CreateSubmissionRequest =>
-        val driverDescription = buildDriverDescription(submitRequest)
-        val s = scheduler.submitDriver(driverDescription)
-        s.serverSparkVersion = sparkVersion
-        val unknownFields = findUnknownFields(requestMessageJson, requestMessage)
-        if (unknownFields.nonEmpty) {
-          // If there are fields that the server does not know about, warn the client
-          s.unknownFields = unknownFields
+        try {
+          val driverDescription = buildDriverDescription(submitRequest)
+          val s = scheduler.submitDriver(driverDescription)
+          s.serverSparkVersion = sparkVersion
+          val unknownFields = findUnknownFields(requestMessageJson, requestMessage)
+          if (unknownFields.nonEmpty) {
+            // If there are fields that the server does not know about, warn the client
+            s.unknownFields = unknownFields
+          }
+          s
+        } catch {
+          case ex: SubmitRestProtocolException =>
+            responseServlet.setStatus(HttpServletResponse.SC_BAD_REQUEST)
+            handleError(s"Bad request: ${ex.getMessage}")
         }
-        s
       case unexpected =>
         responseServlet.setStatus(HttpServletResponse.SC_BAD_REQUEST)
         handleError(s"Received message of unexpected type ${unexpected.messageType}.")
+    }
+  }
+
+  private[mesos] def validateLabelsFormat(properties: Map[String, String]): Unit = {
+    List("spark.mesos.network.labels", "spark.mesos.task.labels", "spark.mesos.driver.labels")
+      .foreach { name =>
+      properties.get(name) foreach { label =>
+        try {
+          MesosProtoUtils.mesosLabels(label)
+        } catch {
+          case _ : SparkException => throw new SubmitRestProtocolException("Malformed label in " +
+            s"${name}: ${label}. Valid label format: ${name}=key1:value1,key2:value2")
+        }
+      }
     }
   }
 }
@@ -173,3 +195,5 @@ private[mesos] class MesosStatusRequestServlet(scheduler: MesosClusterScheduler,
     d
   }
 }
+
+
