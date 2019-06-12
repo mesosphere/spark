@@ -63,7 +63,13 @@ private[mesos] class MesosClusterDispatcher(
 
   private val scheduler = new MesosClusterScheduler(engineFactory, conf)
 
-  private val server = new MesosRestServer(args.host, args.port, conf, scheduler)
+  private val server = new MesosRestServer(
+    args.host, 
+    args.port, 
+    new SecurityManager(conf), 
+    conf, 
+    scheduler)
+
   private val webUi = new MesosClusterUI(
     new SecurityManager(conf),
     args.webUiPort,
