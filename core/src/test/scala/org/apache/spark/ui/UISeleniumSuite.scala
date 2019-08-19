@@ -135,8 +135,8 @@ class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with B
 
       val storageJson = getJson(ui, "storage/rdd")
       storageJson.children.length should be (1)
-      (storageJson.children.head \ "storageLevel").extract[String] should be (
-        StorageLevels.DISK_ONLY.description)
+
+      (storageJson.children.head \ "storageLevel").extract[String] should be (StorageLevels.DISK_ONLY.description)
       val rddJson = getJson(ui, "storage/rdd/0")
       (rddJson  \ "storageLevel").extract[String] should be (StorageLevels.DISK_ONLY.description)
 
@@ -330,11 +330,12 @@ class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with B
         find(cssSelector(".progress-cell .progress")).get.text should be ("2/2 (1 failed)")
       }
       val jobJson = getJson(sc.ui.get, "jobs")
-      (jobJson \\ "numTasks").extract[Int]should be (2)
-      (jobJson \\ "numCompletedTasks").extract[Int] should be (3)
-      (jobJson \\ "numFailedTasks").extract[Int] should be (1)
-      (jobJson \\ "numCompletedStages").extract[Int] should be (2)
-      (jobJson \\ "numFailedStages").extract[Int] should be (1)
+      (jobJson.children.head \ "numTasks").extract[Int]should be (2)
+      (jobJson.children.head \ "numCompletedTasks").extract[Int] should be (3)
+      (jobJson.children.head \ "numFailedTasks").extract[Int] should be (1)
+      (jobJson.children.head \ "numCompletedStages").extract[Int] should be (2)
+      (jobJson.children.head \ "numFailedStages").extract[Int] should be (1)
+
       val stageJson = getJson(sc.ui.get, "stages")
 
       for {
@@ -663,9 +664,9 @@ class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with B
       appListJsonAst.children.length should be (1)
       val attempts = (appListJsonAst.children.head \ "attempts").children
       attempts.size should be (1)
-      (attempts(0) \ "completed").extract[Boolean] should be (false)
-      parseDate(attempts(0) \ "startTime") should be (sc.startTime)
-      parseDate(attempts(0) \ "endTime") should be (-1)
+      (attempts.head \ "completed").extract[Boolean] should be (false)
+      parseDate(attempts.head \ "startTime") should be (sc.startTime)
+      parseDate(attempts.head \ "endTime") should be (-1)
       val oneAppJsonAst = getJson(sc.ui.get, "")
       oneAppJsonAst should be (appListJsonAst.children(0))
     }

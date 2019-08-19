@@ -58,6 +58,12 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
   }
 
   private def testDriverDescription(submissionId: String): MesosDriverDescription = {
+    testDriverDescription(submissionId, Map[String, String]())
+  }
+
+  private def testDriverDescription(
+      submissionId: String,
+      schedulerProps: Map[String, String]): MesosDriverDescription = {
     new MesosDriverDescription(
       "d1",
       "jar",
@@ -65,7 +71,7 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
       1,
       true,
       command,
-      Map[String, String](),
+      schedulerProps,
       submissionId,
       new Date())
   }
@@ -197,6 +203,46 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
     List(" ", "'", "<", ">", "&", "|", "?", "*", ";", "!", "#", "(", ")").foreach(char => {
       assert(escape(s"onlywrap${char}this") === wrapped(s"onlywrap${char}this"))
     })
+  }
+
+  test("escapes spark.app.name correctly") {
+    setScheduler()
+
+    val driverDesc = testDriverDescription("s1", Map[String, String](
+      "spark.app.name" -> "AnApp With $pecialChars.py",
+      "spark.mesos.executor.home" -> "test"
+    ))
+
+    val cmdString = scheduler.getDriverCommandValue(driverDesc)
+    assert(cmdString.contains("AnApp With \\$pecialChars.py"))
+  }
+
+  test("escapes extraJavaOptions correctly") {
+    setScheduler()
+
+    val driverDesc = testDriverDescription("s1", Map[String, String](
+      "spark.app.name" -> "app.py",
+      "spark.mesos.executor.home" -> "test",
+      "spark.driver.extraJavaOptions" -> "-DparamA=\"val1 val2\" -Dpath=$PATH"
+    ))
+
+    val cmdString = scheduler.getDriverCommandValue(driverDesc)
+    assert(cmdString.contains(
+      "spark.driver.extraJavaOptions=\"-DparamA=\\\"val1 val2\\\" -Dpath=\\$PATH"))
+  }
+
+  test("does not escape $MESOS_SANDBOX for --py-files when using a docker image") {
+    setScheduler()
+
+    val driverDesc = testDriverDescription("s1", Map[String, String](
+      "spark.app.name" -> "app.py",
+      "spark.mesos.executor.docker.image" -> "test/spark:01",
+      "spark.submit.pyFiles" -> "http://site.com/extraPythonFile.py"
+    ))
+
+    val cmdString = scheduler.getDriverCommandValue(driverDesc)
+    assert(!cmdString.contains("\\$MESOS_SANDBOX/extraPythonFile.py"))
+    assert(cmdString.contains("$MESOS_SANDBOX/extraPythonFile.py"))
   }
 
   test("supports spark.mesos.driverEnv.*") {

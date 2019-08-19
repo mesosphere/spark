@@ -36,8 +36,6 @@ private[spark] object CoarseGrainedClusterMessages {
       hadoopDelegationCreds: Option[Array[Byte]])
     extends CoarseGrainedClusterMessage
 
-  case object RetrieveLastAllocatedExecutorId extends CoarseGrainedClusterMessage
-
   // Driver to executors
   case class LaunchTask(data: SerializableBuffer) extends CoarseGrainedClusterMessage
 
