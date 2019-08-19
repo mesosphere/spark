@@ -20,6 +20,8 @@ package org.apache.spark
 import java.net.{Authenticator, PasswordAuthentication}
 import java.nio.charset.StandardCharsets.UTF_8
 
+import com.google.common.hash.HashCodes
+import java.nio.file.{Files => jFiles, Paths => jPaths}
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.security.{Credentials, UserGroupInformation}
 
@@ -327,7 +329,7 @@ private[spark] class SecurityManager(
         // in different context.
         .orElse(Option(secretKey))
         .orElse(Option(sparkConf.getenv(ENV_AUTH_SECRET)))
-        .orElse(sparkConf.getOption(SPARK_AUTH_SECRET_CONF))
+        .orElse(getFileBasedSecret())
         .getOrElse {
           throw new IllegalArgumentException(
             s"A secret key must be specified via the $SPARK_AUTH_SECRET_CONF config")
@@ -335,6 +337,21 @@ private[spark] class SecurityManager(
     } else {
       null
     }
+  }
+
+  /**
+   * Trying to find a File Based Secret with path specified in SPARK_AUTH_SECRET_CONF
+   */
+  def getFileBasedSecret(): Option[String] = {
+    sparkConf
+      .getOption(SPARK_AUTH_SECRET_CONF)
+      .map { value =>
+        if (jFiles.exists(jPaths.get(value))) {
+          HashCodes.fromBytes(jFiles.readAllBytes(jPaths.get(value))).toString
+        } else {
+          value
+        }
+      }
   }
 
   /**
