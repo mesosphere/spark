@@ -442,7 +442,7 @@ See the [configuration page](configuration.html) for information on Spark config
   </td>
 </tr>
 <tr>
-  <td><code>spark.mesos.executor.memoryOverhead</code></td>
+  <td><code>spark.executor.memoryOverhead</code></td>
   <td>executor memory * 0.10, with minimum of 384</td>
   <td>
     The amount of additional memory, specified in MB, to be allocated per executor. By default,

@@ -91,10 +91,10 @@ class MesosSchedulerUtilsSuite extends SparkFunSuite with Matchers with MockitoS
     utils.executorMemory(f.sc) shouldBe 4505
   }
 
-  test("use spark.mesos.executor.memoryOverhead (if set)") {
+  test("use spark.executor.memoryOverhead (if set)") {
     val f = fixture
     when(f.sc.executorMemory).thenReturn(1024)
-    f.sparkConf.set("spark.mesos.executor.memoryOverhead", "512")
+    f.sparkConf.set("spark.executor.memoryOverhead", "512")
     utils.executorMemory(f.sc) shouldBe 1536
   }
 
