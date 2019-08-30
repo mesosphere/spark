@@ -63,9 +63,6 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
   private lazy val hadoopDelegationTokenManager: MesosHadoopDelegationTokenManager =
     new MesosHadoopDelegationTokenManager(conf, sc.hadoopConfiguration, driverEndpoint)
 
-  // Blacklist a slave after this many failures
-  private val MAX_SLAVE_FAILURES = 2
-
   private val maxCoresOption = conf.getOption("spark.cores.max").map(_.toInt)
 
   private val executorCoresOption = conf.getOption("spark.executor.cores").map(_.toInt)
@@ -603,7 +600,11 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
       numExecutors < executorLimit &&
       gpus <= offerGPUs &&
       gpus + totalGpusAcquired <= maxGpus &&
-      slaves.get(slaveId).map(_.taskFailures).getOrElse(0) < MAX_SLAVE_FAILURES &&
+      // nodeBlacklist() currently only gets updated based on failures in spark tasks.
+      // If a mesos task fails to even start -- that is,
+      // if a spark executor fails to launch on a node -- nodeBlacklist does not get updated
+      // see SPARK-24567 for details
+      !scheduler.nodeBlacklist().contains(offerHostname) &&
       meetsPortRequirements &&
       satisfiesLocality(offerHostname)
   }
@@ -689,14 +690,9 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
           totalGpusAcquired -= gpus
           gpusByTaskId -= taskId
         }
-        // If it was a failure, mark the slave as failed for blacklisting purposes
         if (TaskState.isFailed(state)) {
           slave.taskFailures += 1
-
-          if (slave.taskFailures >= MAX_SLAVE_FAILURES) {
-            logInfo(s"Blacklisting Mesos slave $slaveId due to too many failures; " +
-                "is Spark installed on it?")
-          }
+          logError(s"Mesos task $taskId failed on Mesos slave $slaveId.")
         }
         executorTerminated(d, slaveId, taskId, s"Executor finished with state $state")
         // In case we'd rejected everything before but have now lost a node
@@ -858,8 +854,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
   def getTaskFailureCount(): Int = slaves.values.map(_.taskFailures).sum
   def getKnownAgentsCount(): Int = slaves.size
   def getOccupiedAgentsCount(): Int = slaves.values.map(_.taskIDs.size).filter(_ != 0).size
-  def getBlacklistedAgentCount(): Int =
-    slaves.values.filter(_.taskFailures >= MAX_SLAVE_FAILURES).size
+  def getBlacklistedAgentCount(): Int = scheduler.nodeBlacklist().size
 }
 
 private class Slave(val hostname: String) {
