@@ -547,6 +547,85 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
     assert(state.launchedDrivers.head.taskId.getValue.endsWith("-retry-1"))
   }
 
+  test("restarts supervised drivers without backoff if node is draining") {
+    val conf = new SparkConf()
+    conf.setMaster("mesos://localhost:5050")
+    conf.setAppName("TestNodeDrainingEvents")
+    setScheduler(conf.getAll.toMap)
+
+    val mem = 1000
+    val cpu = 1
+    val offers = List(
+      Utils.createOffer("o1", "s1", mem, cpu, None),
+      Utils.createOffer("o2", "s2", mem, cpu, None))
+
+    val response = scheduler.submitDriver(
+      new MesosDriverDescription("d1", "jar", 100, 1, true, command,
+        Map(("spark.mesos.executor.home", "test"), ("spark.app.name", "test")), "sub1", new Date()))
+    assert(response.success)
+
+    // Offer a resource to launch the submitted driver and send TASK_RUNNING
+    scheduler.resourceOffers(driver, Collections.singletonList(offers.head))
+    var state = scheduler.getSchedulerState()
+    assert(state.launchedDrivers.size == 1)
+
+    // Kill task with state TASK_KILLED and reason REASON_SLAVE_DRAINING
+    val agent1 = SlaveID.newBuilder().setValue("s1").build()
+    var taskStatus = TaskStatus.newBuilder()
+      .setTaskId(TaskID.newBuilder().setValue(response.submissionId).build())
+      .setSlaveId(agent1)
+      .setState(MesosTaskState.TASK_KILLED)
+      .setReason(TaskStatus.Reason.REASON_SLAVE_DRAINING)
+      .build()
+
+    scheduler.statusUpdate(driver, taskStatus)
+    state = scheduler.getSchedulerState()
+    assert(state.launchedDrivers.isEmpty)
+    assert(state.pendingRetryDrivers.size === 1)
+
+    assert(
+      state.pendingRetryDrivers.head.retryState.exists { retryState =>
+        retryState.nextRetry.getTime <= new Date().getTime
+      }
+    )
+
+    // Offer new resource to retry driver on a new agent
+    val agent2 = SlaveID.newBuilder().setValue("s2").build()
+    scheduler.resourceOffers(driver, Collections.singletonList(offers(1)))
+    taskStatus = TaskStatus.newBuilder()
+      .setTaskId(TaskID.newBuilder().setValue(response.submissionId).build())
+      .setSlaveId(agent2)
+      .setState(MesosTaskState.TASK_RUNNING)
+      .build()
+
+    scheduler.statusUpdate(driver, taskStatus)
+    state = scheduler.getSchedulerState()
+    assert(state.pendingRetryDrivers.isEmpty)
+    assert(state.launchedDrivers.size == 1)
+
+    val newTaskId = state.launchedDrivers.head.taskId.getValue
+    assert(newTaskId.endsWith("-retry-1"))
+
+    // Kill retried task with state TASK_GONE_BY_OPERATOR and reason REASON_SLAVE_DRAINING
+    taskStatus = TaskStatus.newBuilder()
+      .setTaskId(TaskID.newBuilder().setValue(newTaskId).build())
+      .setSlaveId(agent2)
+      .setState(MesosTaskState.TASK_GONE_BY_OPERATOR)
+      .setReason(TaskStatus.Reason.REASON_SLAVE_DRAINING)
+      .build()
+
+    scheduler.statusUpdate(driver, taskStatus)
+    state = scheduler.getSchedulerState()
+    assert(state.launchedDrivers.isEmpty)
+    assert(state.pendingRetryDrivers.size === 1)
+
+    assert(
+      state.pendingRetryDrivers.head.retryState.exists { retryState =>
+        retryState.nextRetry.getTime <= new Date().getTime
+      }
+    )
+  }
+
   test("Declines offer with refuse seconds = 120.") {
     setScheduler()
 

@@ -17,9 +17,9 @@
 
 package org.apache.spark.scheduler.cluster.mesos
 
+import java.util.Date
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.Date
 
 import scala.collection.mutable.HashMap
 
