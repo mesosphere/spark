@@ -585,7 +585,9 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
 
     assert(
       state.pendingRetryDrivers.head.retryState.exists { retryState =>
-        retryState.nextRetry.getTime <= new Date().getTime
+        retryState.nextRetry.getTime <= new Date().getTime &&
+          retryState.retries === 1 &&
+          retryState.waitTime === 1
       }
     )
 
@@ -603,10 +605,8 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
     assert(state.pendingRetryDrivers.isEmpty)
     assert(state.launchedDrivers.size == 1)
 
-    val newTaskId = state.launchedDrivers.head.taskId.getValue
-    assert(newTaskId.endsWith("-retry-1"))
-
     // Kill retried task with state TASK_GONE_BY_OPERATOR and reason REASON_SLAVE_DRAINING
+    val newTaskId = state.launchedDrivers.head.taskId.getValue
     taskStatus = TaskStatus.newBuilder()
       .setTaskId(TaskID.newBuilder().setValue(newTaskId).build())
       .setSlaveId(agent2)
@@ -621,7 +621,9 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
 
     assert(
       state.pendingRetryDrivers.head.retryState.exists { retryState =>
-        retryState.nextRetry.getTime <= new Date().getTime
+        retryState.nextRetry.getTime <= new Date().getTime &&
+          retryState.retries === 2 &&
+          retryState.waitTime === 1
       }
     )
   }
