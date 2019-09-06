@@ -765,7 +765,6 @@ private[spark] class MesosClusterScheduler(
    * to be validated by Mesos.
    */
   private def shouldRelaunch(status: TaskStatus): Boolean = {
-
     status.getState == MesosTaskState.TASK_FAILED ||
       status.getState == MesosTaskState.TASK_LOST ||
       isNodeDraining(status)
@@ -798,7 +797,6 @@ private[spark] class MesosClusterScheduler(
 
   override def statusUpdate(driver: SchedulerDriver, status: TaskStatus): Unit = {
     val taskId = status.getTaskId.getValue
-
 
     if (status.hasReason) {
       logInfo(s"Received status update: taskId=${taskId}" +

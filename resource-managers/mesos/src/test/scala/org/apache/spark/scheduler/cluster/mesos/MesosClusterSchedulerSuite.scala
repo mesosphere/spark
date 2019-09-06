@@ -567,7 +567,7 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
     // Offer a resource to launch the submitted driver and send TASK_RUNNING
     scheduler.resourceOffers(driver, Collections.singletonList(offers.head))
     var state = scheduler.getSchedulerState()
-    assert(state.launchedDrivers.size == 1)
+    assert(state.launchedDrivers.size === 1)
 
     // Kill task with state TASK_KILLED and reason REASON_SLAVE_DRAINING
     val agent1 = SlaveID.newBuilder().setValue("s1").build()
