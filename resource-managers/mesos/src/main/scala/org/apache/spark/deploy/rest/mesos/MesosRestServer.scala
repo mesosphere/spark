@@ -192,7 +192,11 @@ private[mesos] class MesosSubmitRequestServlet(
   }
 
   private[mesos] def getDriverRoleOrDefault(properties: Map[String, String]): Option[String] = {
-    Option(properties.getOrElse("spark.mesos.role", conf.get("spark.mesos.role")))
+    if (properties.get("spark.mesos.role").isDefined) {
+       properties.get("spark.mesos.role")
+    } else {
+      conf.getOption("spark.mesos.role")
+    }
   }
 
   private[mesos] def validateLabelsFormat(properties: Map[String, String]): Unit = {
