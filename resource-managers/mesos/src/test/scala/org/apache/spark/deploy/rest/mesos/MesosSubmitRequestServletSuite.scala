@@ -27,6 +27,16 @@ import org.apache.spark.scheduler.cluster.mesos.MesosClusterScheduler
 class MesosSubmitRequestServletSuite extends SparkFunSuite
   with TestPrematureExit {
 
+  def buildCreateSubmissionRequest(): CreateSubmissionRequest = {
+    val request = new CreateSubmissionRequest
+    request.appResource = "hdfs://test.jar"
+    request.mainClass = "foo.Bar"
+    request.appArgs = Array.empty[String]
+    request.sparkProperties = Map.empty[String, String]
+    request.environmentVariables = Map.empty[String, String]
+    request
+  }
+
   test("test buildDriverDescription applies default settings from dispatcher conf to Driver") {
     val conf = new SparkConf(loadDefaults = false)
 
@@ -38,13 +48,7 @@ class MesosSubmitRequestServletSuite extends SparkFunSuite
       conf
     )
 
-    val request = new CreateSubmissionRequest
-    request.appResource = "hdfs://test.jar"
-    request.mainClass = "foo.Bar"
-    request.appArgs = Array.empty[String]
-    request.sparkProperties = Map.empty[String, String]
-    request.environmentVariables = Map.empty[String, String]
-
+    val request = buildCreateSubmissionRequest()
     val driverConf = submitRequestServlet.buildDriverDescription(request).conf
 
     assert("test_network" == driverConf.get("spark.mesos.network.name"))
@@ -59,13 +63,65 @@ class MesosSubmitRequestServletSuite extends SparkFunSuite
       conf
     )
 
-    val request = new CreateSubmissionRequest
-    request.appResource = "hdfs://test.jar"
-    request.mainClass = "foo.Bar"
-    request.appArgs = Array.empty[String]
+    val request = buildCreateSubmissionRequest()
     request.sparkProperties = Map("spark.mesos.network.labels" -> "k0,k1:v1") // malformed label
-    request.environmentVariables = Map.empty[String, String]
 
+    assertThrows[SubmitRestProtocolException] {
+      submitRequestServlet.buildDriverDescription(request)
+    }
+  }
+
+  test("dispatcher propagates role to Drivers if 'spark.mesos.role' is not provided") {
+    val dispatcherRole = "dispatcher"
+    val driverRole = "driver"
+
+    val conf = new SparkConf(loadDefaults = false)
+    conf.set("spark.mesos.role", dispatcherRole)
+
+    val submitRequestServlet = new MesosSubmitRequestServlet(
+      scheduler = mock(classOf[MesosClusterScheduler]),
+      conf
+    )
+
+    // driver role is used when it is provided
+    var request = buildCreateSubmissionRequest()
+    request.sparkProperties = Map("spark.mesos.role" -> driverRole)
+    var driverConf = submitRequestServlet.buildDriverDescription(request).conf
+    assert(driverConf.get("spark.mesos.role") === driverRole)
+
+    // dispatcher role is used when driver role is not provided
+    request = buildCreateSubmissionRequest()
+    driverConf = submitRequestServlet.buildDriverDescription(request).conf
+    assert(driverConf.get("spark.mesos.role") === dispatcherRole)
+  }
+
+  test("dispatcher enforces role when 'spark.mesos.dispatcher.role.enforce' enabled") {
+    val dispatcherRole = "dispatcher"
+    val driverRole = "driver"
+
+    val conf = new SparkConf(loadDefaults = false)
+    conf.set("spark.mesos.role", dispatcherRole)
+    conf.set("spark.mesos.dispatcher.role.enforce", "true")
+
+    val submitRequestServlet = new MesosSubmitRequestServlet(
+      scheduler = mock(classOf[MesosClusterScheduler]),
+      conf
+    )
+
+    // dispatcher role is used by default
+    var request = buildCreateSubmissionRequest()
+    var driverConf = submitRequestServlet.buildDriverDescription(request).conf
+    assert(driverConf.get("spark.mesos.role") === dispatcherRole)
+
+    // if both driver and dispatcher use the same role the request should be accepted
+    request = buildCreateSubmissionRequest()
+    request.sparkProperties = Map("spark.mesos.role" -> dispatcherRole)
+    driverConf = submitRequestServlet.buildDriverDescription(request).conf
+    assert(driverConf.get("spark.mesos.role") === dispatcherRole)
+
+    // if driver specifies a different role and enforcement is enabled the request should fail
+    request = buildCreateSubmissionRequest()
+    request.sparkProperties = Map("spark.mesos.role" -> driverRole)
     assertThrows[SubmitRestProtocolException] {
       submitRequestServlet.buildDriverDescription(request)
     }

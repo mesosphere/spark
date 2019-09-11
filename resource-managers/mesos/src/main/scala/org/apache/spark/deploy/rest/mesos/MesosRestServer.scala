@@ -115,6 +115,12 @@ private[mesos] class MesosSubmitRequestServlet(
       .setAll(defaultConf)
       .setAll(sparkProperties)
 
+    // role propagation and enforcement
+    validateRole(sparkProperties)
+    getDriverRoleOrDefault(sparkProperties).foreach { role =>
+      driverConf.set("spark.mesos.role", role)
+    }
+
     val extraClassPath = driverExtraClassPath.toSeq.flatMap(_.split(File.pathSeparator))
     val extraLibraryPath = driverExtraLibraryPath.toSeq.flatMap(_.split(File.pathSeparator))
     val extraJavaOpts = driverExtraJavaOptions.map(Utils.splitCommandString).getOrElse(Seq.empty)
@@ -159,6 +165,39 @@ private[mesos] class MesosSubmitRequestServlet(
       case unexpected =>
         responseServlet.setStatus(HttpServletResponse.SC_BAD_REQUEST)
         handleError(s"Received message of unexpected type ${unexpected.messageType}.")
+    }
+  }
+
+  /**
+   * Validates that 'spark.mesos.role' provided via spark-submit doesn't override the
+   * default Dispatcher role when 'spark.mesos.dispatcher.role.enforce' is enabled.
+   * In case 'spark.mesos.role' is not set for Dispatcher, no role is enforced and
+   * users can submit jobs with any role.
+   */
+  private[mesos] def validateRole(properties: Map[String, String]): Unit = {
+    properties.get("spark.mesos.role").filter(_.nonEmpty).foreach { driverRole =>
+      conf.getOption("spark.mesos.role").filter(_.nonEmpty)
+        .foreach { dispatcherRole =>
+
+        val roleEnforcementEnabled =
+          conf.getBoolean("spark.mesos.dispatcher.role.enforce", defaultValue = false)
+
+        if (dispatcherRole != driverRole && roleEnforcementEnabled) {
+            throw new SubmitRestProtocolException(
+              "Dispatcher is running with role enforcement enabled but submitted Driver" +
+                s" attempts to override the default role. Enforced role: $dispatcherRole," +
+                s" Driver role: $driverRole"
+            )
+        }
+      }
+    }
+  }
+
+  private[mesos] def getDriverRoleOrDefault(properties: Map[String, String]): Option[String] = {
+    if (properties.get("spark.mesos.role").isDefined) {
+       properties.get("spark.mesos.role")
+    } else {
+      conf.getOption("spark.mesos.role")
     }
   }
 
