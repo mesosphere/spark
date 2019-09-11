@@ -101,7 +101,8 @@ private[mesos] class MesosClusterSchedulerSource(scheduler: MesosClusterSchedule
     metricRegistry.timer(MetricRegistry.name("drivers", "submit_to_exception"))
 
   // Duration from (most recent) launch to a retry.
-  private val launchToRetry = metricRegistry.timer(MetricRegistry.name("drivers", "launch_to_retry"))
+  private val launchToRetry =
+    metricRegistry.timer(MetricRegistry.name("drivers", "launch_to_retry"))
 
   // Duration from initial submission to finished.
   private val submitToFinish =
