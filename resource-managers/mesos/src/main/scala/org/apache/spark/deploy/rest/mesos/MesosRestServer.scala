@@ -175,8 +175,10 @@ private[mesos] class MesosSubmitRequestServlet(
    * users can submit jobs with any role.
    */
   private[mesos] def validateRole(properties: Map[String, String]): Unit = {
-    properties.get("spark.mesos.role").foreach { driverRole =>
-      conf.getOption("spark.mesos.role").foreach { dispatcherRole =>
+    properties.get("spark.mesos.role").filter(_.nonEmpty).foreach { driverRole =>
+      conf.getOption("spark.mesos.role").filter(_.nonEmpty)
+        .foreach { dispatcherRole =>
+
         val roleEnforcementEnabled =
           conf.getBoolean("spark.mesos.dispatcher.role.enforce", defaultValue = false)
 
