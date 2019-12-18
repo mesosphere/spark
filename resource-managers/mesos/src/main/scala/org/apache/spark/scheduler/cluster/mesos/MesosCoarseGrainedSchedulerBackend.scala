@@ -360,6 +360,8 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
   override def resourceOffers(d: org.apache.mesos.SchedulerDriver, offers: JList[Offer]) {
     stateLock.synchronized {
       metricsSource.recordOffers(offers.size)
+      logDebug(s"Received ${offers.size} resource offers.")
+
       if (stopCalled) {
         logDebug("Ignoring offers during shutdown")
         // Driver should simply return a stopped status on race
@@ -370,9 +372,10 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
       }
 
       if (numExecutors >= executorLimit) {
-        logDebug("Executor limit reached. numExecutors: " + numExecutors +
-          " executorLimit: " + executorLimit)
         offers.asScala.map(_.getId).foreach(d.declineOffer)
+        logDebug("Executor limit reached. numExecutors: " + numExecutors +
+          " executorLimit: " + executorLimit + " . Suppressing further offers.")
+        d.suppressOffers
         launchingExecutors = false
         return
       } else {
@@ -381,8 +384,6 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
           localityWaitStartTime = System.currentTimeMillis()
         }
       }
-
-      logDebug(s"Received ${offers.size} resource offers.")
 
       val (matchedOffers, unmatchedOffers) = offers.asScala.partition { offer =>
         val offerAttributes = toAttributeMap(offer.getAttributesList)
@@ -455,6 +456,8 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
           Collections.singleton(offer.getId),
           offerTasks.asJava)
       } else if (totalCoresAcquired >= maxCores) {
+        logDebug("Max core number is reached. Suppressing further offers.")
+        schedulerDriver.suppressOffers()
         // Reject an offer for a configurable amount of time to avoid starving other frameworks
         metricsSource.recordDeclineFinished
         declineOffer(driver,
@@ -697,6 +700,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
         executorTerminated(d, slaveId, taskId, s"Executor finished with state $state")
         // In case we'd rejected everything before but have now lost a node
         metricsSource.recordRevive
+        logDebug("Reviving offers due to a finished executor task.")
         d.reviveOffers
       }
     }
@@ -791,7 +795,13 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
     // We don't truly know if we can fulfill the full amount of executors
     // since at coarse grain it depends on the amount of slaves available.
     logInfo("Capping the total amount of executors to " + requestedTotal)
+    val reviveNeeded = executorLimit < requestedTotal
     executorLimitOption = Some(requestedTotal)
+    if (reviveNeeded && schedulerDriver != null) {
+      logDebug("The executor limit increased. Reviving offers.")
+      metricsSource.recordRevive
+      schedulerDriver.reviveOffers()
+    }
     // Update the locality wait start time to continue trying for locality.
     localityWaitStartTime = System.currentTimeMillis()
     true

@@ -339,6 +339,48 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     assert(taskInfos.length == 2)
   }
 
+  test("scheduler backend suppresses mesos offers when max core count reached") {
+    val executorCores = 2
+    val executors = 2
+    setBackend(Map(
+      "spark.executor.cores" -> executorCores.toString(),
+      "spark.cores.max" -> (executorCores * executors).toString()))
+
+    val executorMemory = backend.executorMemory(sc)
+    offerResources(List(
+      Resources(executorMemory, executorCores),
+      Resources(executorMemory, executorCores),
+      Resources(executorMemory, executorCores)))
+
+    assert(backend.getTaskCount() == 2)
+    verify(driver, times(1)).suppressOffers()
+  }
+
+  test("scheduler backend suppresses mesos offers when the executor cap is reached") {
+    val executorCores = 1
+    val executors = 10
+    setBackend(Map(
+      "spark.executor.cores" -> executorCores.toString(),
+      "spark.cores.max" -> (executorCores * executors).toString()))
+
+    val executorMemory = backend.executorMemory(sc)
+    offerResources(List(
+      Resources(executorMemory, executorCores),
+      Resources(executorMemory, executorCores),
+      Resources(executorMemory, executorCores)))
+
+    assert(backend.getTaskCount() == 3)
+    verify(driver, times(0)).suppressOffers()
+
+    assert(backend.doRequestTotalExecutors(3).futureValue)
+    offerResources(List(
+      Resources(executorMemory, executorCores)))
+    verify(driver, times(1)).suppressOffers()
+
+    assert(backend.doRequestTotalExecutors(2).futureValue)
+    verify(driver, times(0)).reviveOffers()
+  }
+
   test("mesos doesn't register twice with the same shuffle service") {
     setBackend(Map(SHUFFLE_SERVICE_ENABLED.key -> "true"))
     val (mem, cpu) = (backend.executorMemory(sc), 4)
