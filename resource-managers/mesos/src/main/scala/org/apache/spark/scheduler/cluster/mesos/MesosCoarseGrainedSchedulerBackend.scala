@@ -360,7 +360,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
   override def resourceOffers(d: org.apache.mesos.SchedulerDriver, offers: JList[Offer]) {
     stateLock.synchronized {
       metricsSource.recordOffers(offers.size)
-      logDebug(s"Received ${offers.size} resource offers.")
+      logInfo(s"Received ${offers.size} resource offers.")
 
       if (stopCalled) {
         logDebug("Ignoring offers during shutdown")
@@ -373,7 +373,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
 
       if (numExecutors >= executorLimit) {
         offers.asScala.map(_.getId).foreach(d.declineOffer)
-        logDebug("Executor limit reached. numExecutors: " + numExecutors +
+        logInfo("Executor limit reached. numExecutors: " + numExecutors +
           " executorLimit: " + executorLimit + " . Suppressing further offers.")
         d.suppressOffers
         launchingExecutors = false
@@ -456,7 +456,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
           Collections.singleton(offer.getId),
           offerTasks.asJava)
       } else if (totalCoresAcquired >= maxCores) {
-        logDebug("Max core number is reached. Suppressing further offers.")
+        logInfo("Max core number is reached. Suppressing further offers.")
         schedulerDriver.suppressOffers()
         // Reject an offer for a configurable amount of time to avoid starving other frameworks
         metricsSource.recordDeclineFinished
@@ -700,7 +700,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
         executorTerminated(d, slaveId, taskId, s"Executor finished with state $state")
         // In case we'd rejected everything before but have now lost a node
         metricsSource.recordRevive
-        logDebug("Reviving offers due to a finished executor task.")
+        logInfo("Reviving offers due to a finished executor task.")
         d.reviveOffers
       }
     }
@@ -798,7 +798,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
     val reviveNeeded = executorLimit < requestedTotal
     executorLimitOption = Some(requestedTotal)
     if (reviveNeeded && schedulerDriver != null) {
-      logDebug("The executor limit increased. Reviving offers.")
+      logInfo("The executor limit increased. Reviving offers.")
       metricsSource.recordRevive
       schedulerDriver.reviveOffers()
     }
