@@ -354,6 +354,15 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
 
     assert(backend.getTaskCount() == 2)
     verify(driver, times(1)).suppressOffers()
+
+    // Finishing at least one task should trigger a revive
+    val status = createTaskStatus("0", "s1", TaskState.TASK_FINISHED)
+    backend.statusUpdate(driver, status)
+    verify(driver, times(1)).reviveOffers()
+
+    offerResources(List(
+      Resources(executorMemory, executorCores)))
+    verify(driver, times(2)).suppressOffers()
   }
 
   test("scheduler backend suppresses mesos offers when the executor cap is reached") {
