@@ -19,6 +19,7 @@ package org.apache.spark.scheduler.cluster.mesos
 
 import java.io.File
 import java.util.{Collections, List => JList, UUID}
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.ReentrantLock
 
@@ -40,7 +41,7 @@ import org.apache.spark.network.shuffle.mesos.MesosExternalShuffleClient
 import org.apache.spark.rpc.RpcEndpointAddress
 import org.apache.spark.scheduler.{SlaveLost, TaskSchedulerImpl}
 import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
-import org.apache.spark.util.Utils
+import org.apache.spark.util.{ThreadUtils, Utils}
 
 /**
  * A SchedulerBackend that runs tasks on Mesos, but uses "coarse-grained" tasks, where it holds
@@ -188,6 +189,10 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
   private val schedulerUuid: String = UUID.randomUUID().toString
   private val nextExecutorNumber = new AtomicLong()
 
+  private val mesosReviveThread =
+    ThreadUtils.newDaemonSingleThreadScheduledExecutor("mesos-revive-thread")
+  private val mesosReviveIntervalMs = conf.getTimeAsMs("spark.scheduler.revive.interval", "1000ms")
+
   override def start() {
     super.start()
 
@@ -219,6 +224,17 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
 
     launcherBackend.setState(SparkAppHandle.State.SUBMITTED)
     startScheduler(driver)
+
+    // Periodic check if there is a need to revive mesos offers
+    mesosReviveThread.scheduleAtFixedRate(new Runnable {
+      override def run(): Unit = {
+        stateLock.synchronized {
+          if (!offersSuppressed) {
+            schedulerDriver.reviveOffers
+          }
+        }
+      }
+    }, mesosReviveIntervalMs, mesosReviveIntervalMs, TimeUnit.MILLISECONDS)
   }
 
   def createCommand(offer: Offer, numCores: Int, taskId: String): CommandInfo = {
@@ -711,17 +727,6 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
     }
   }
 
-  override def reviveOffers(): Unit = {
-    super.reviveOffers
-
-    // check if we need to call schedulerDriver.reviveOffers
-    stateLock.synchronized {
-      if (!offersSuppressed) {
-        schedulerDriver.reviveOffers
-      }
-    }
-  }
-
   private def reviveMesosOffers(driver: Option[org.apache.mesos.SchedulerDriver]): Unit = {
     stateLock.synchronized {
       metricsSource.recordRevive
@@ -743,6 +748,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
   }
 
   override def stop() {
+    mesosReviveThread.shutdownNow()
     stopSchedulerBackend()
     launcherBackend.setState(SparkAppHandle.State.FINISHED)
     launcherBackend.close()

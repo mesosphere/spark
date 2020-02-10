@@ -399,6 +399,29 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     verify(driver, times(2)).suppressOffers()
   }
 
+  test("scheduler periodically revives mesos offers if needed") {
+    val executorCores = 1
+    val executors = 3
+    setBackend(Map(
+      "spark.executor.cores" -> executorCores.toString(),
+      "spark.cores.max" -> (executorCores * executors).toString()))
+
+    val executorMemory = backend.executorMemory(sc)
+    offerResources(List(
+      Resources(executorMemory, executorCores)))
+
+    assert(backend.getTaskCount() == 1)
+    verify(driver, times(0)).suppressOffers()
+
+    // Verify that offers are revived every second
+    Thread.sleep(1500)
+    verify(driver, times(1)).reviveOffers()
+
+    Thread.sleep(1000)
+    verify(driver, times(2)).reviveOffers()
+
+  }
+
   test("mesos doesn't register twice with the same shuffle service") {
     setBackend(Map(SHUFFLE_SERVICE_ENABLED.key -> "true"))
     val (mem, cpu) = (backend.executorMemory(sc), 4)
