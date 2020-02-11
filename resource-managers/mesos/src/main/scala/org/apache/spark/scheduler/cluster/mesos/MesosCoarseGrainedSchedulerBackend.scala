@@ -191,7 +191,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
 
   private val mesosReviveThread =
     ThreadUtils.newDaemonSingleThreadScheduledExecutor("mesos-revive-thread")
-  private val mesosReviveIntervalMs = conf.getTimeAsMs("spark.scheduler.revive.interval", "1000ms")
+  private val mesosReviveIntervalMs = conf.getTimeAsMs("spark.mesos.scheduler.revive.interval", "10s")
 
   override def start() {
     super.start()
@@ -230,6 +230,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
       override def run(): Unit = {
         stateLock.synchronized {
           if (!offersSuppressed) {
+            logDebug("scheduled mesos offers revive")
             schedulerDriver.reviveOffers
           }
         }
@@ -721,8 +722,10 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
         }
         executorTerminated(d, slaveId, taskId, s"Executor finished with state $state")
         // In case we'd rejected everything before but have now lost a node
-        reviveMesosOffers(Option(d))
-        logInfo("Reviving offers due to a finished executor task.")
+        if (state != TaskState.FINISHED) {
+          logInfo("Reviving offers due to a finished executor task.")
+          reviveMesosOffers(Option(d))
+        }
       }
     }
   }

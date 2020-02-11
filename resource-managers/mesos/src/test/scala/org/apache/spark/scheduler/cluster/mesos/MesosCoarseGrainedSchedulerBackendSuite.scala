@@ -356,7 +356,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     verify(driver, times(1)).suppressOffers()
 
     // Finishing at least one task should trigger a revive
-    val status = createTaskStatus("0", "s1", TaskState.TASK_FINISHED)
+    val status = createTaskStatus("0", "s1", TaskState.TASK_FAILED)
     backend.statusUpdate(driver, status)
     verify(driver, times(1)).reviveOffers()
 
@@ -390,7 +390,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     verify(driver, times(0)).reviveOffers()
 
     // Finishing at least one task should trigger a revive
-    val status = createTaskStatus("0", "s1", TaskState.TASK_FINISHED)
+    val status = createTaskStatus("0", "s1", TaskState.TASK_FAILED)
     backend.statusUpdate(driver, status)
     verify(driver, times(1)).reviveOffers()
 
@@ -403,6 +403,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     val executorCores = 1
     val executors = 3
     setBackend(Map(
+      "spark.mesos.scheduler.revive.interval" -> "1s",
       "spark.executor.cores" -> executorCores.toString(),
       "spark.cores.max" -> (executorCores * executors).toString()))
 
