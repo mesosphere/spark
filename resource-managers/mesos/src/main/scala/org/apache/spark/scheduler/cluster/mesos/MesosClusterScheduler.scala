@@ -782,13 +782,12 @@ private[spark] class MesosClusterScheduler(
     retryState: Option[MesosClusterRetryState], status: TaskStatus): MesosClusterRetryState = {
 
     val (retries, waitTimeSec) = retryState
-      .map { rs => (rs.retries + 1, rs.waitTime * 2) }
+      .map { rs => (rs.retries + 1, if (isNodeDraining(status)) rs.waitTime else rs.waitTime * 2) }
       .getOrElse{ (1, 1) }
 
     // if a node is draining, the driver should be relaunched without backoff
     if (isNodeDraining(status)) {
-      new MesosClusterRetryState(status, retries, new Date(),
-        if (waitTimeSec > 1) waitTimeSec / 2 else 1) // Keep waitTime the same
+      new MesosClusterRetryState(status, retries, new Date(), waitTimeSec)
     } else {
       val nextRetry = new Date(new Date().getTime + waitTimeSec * 1000L)
       new MesosClusterRetryState(status, retries, nextRetry, waitTimeSec)
