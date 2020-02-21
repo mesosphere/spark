@@ -789,11 +789,12 @@ private[spark] class MesosClusterScheduler(
       if (isNodeDraining(status)) {
         new MesosClusterRetryState(status, newRetries, now, rs.waitTime)
       } else {
-        new MesosClusterRetryState(status, newRetries, DateUtils.addSeconds(now, rs.waitTime), rs.waitTime * 2)
+        new MesosClusterRetryState(
+          status, newRetries, DateUtils.addSeconds(now, rs.waitTime), rs.waitTime * 2)
       }
     }.getOrElse {
       // this is the first retry which should happen without backoff
-      new MesosClusterRetryState(status, 1, DateUtils.addSeconds(now, 1), 1)
+      new MesosClusterRetryState(status, 1, now, 1)
     }
   }
 
