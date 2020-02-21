@@ -20,6 +20,8 @@ package org.apache.spark.scheduler.cluster.mesos
 import java.io.File
 import java.util.{Collections, Date, List => JList}
 
+import org.apache.commons.lang3.time.DateUtils
+
 import org.apache.mesos.{Protos, Scheduler, SchedulerDriver}
 import org.apache.mesos.Protos.{TaskState => MesosTaskState, _}
 import org.apache.mesos.Protos.Environment.Variable
@@ -779,18 +781,19 @@ private[spark] class MesosClusterScheduler(
   }
 
   private def getNewRetryState(
-    retryState: Option[MesosClusterRetryState], status: TaskStatus): MesosClusterRetryState = {
-
-    val (retries, waitTimeSec) = retryState
-      .map { rs => (rs.retries + 1, if (isNodeDraining(status)) rs.waitTime else rs.waitTime * 2) }
-      .getOrElse{ (1, 1) }
-
-    // if a node is draining, the driver should be relaunched without backoff
-    if (isNodeDraining(status)) {
-      new MesosClusterRetryState(status, retries, new Date(), waitTimeSec)
-    } else {
-      val nextRetry = new Date(new Date().getTime + waitTimeSec * 1000L)
-      new MesosClusterRetryState(status, retries, nextRetry, waitTimeSec)
+      retryState: Option[MesosClusterRetryState], status: TaskStatus): MesosClusterRetryState = {
+    val now = new Date()
+    retryState.map { rs =>
+      val newRetries = rs.retries + 1
+      // if a node is draining, the driver should be relaunched without backoff
+      if (isNodeDraining(status)) {
+        new MesosClusterRetryState(status, newRetries, now, rs.waitTime)
+      } else {
+        new MesosClusterRetryState(status, newRetries, DateUtils.addSeconds(now, rs.waitTime), rs.waitTime * 2)
+      }
+    }.getOrElse {
+      // this is the first retry which should happen without backoff
+      new MesosClusterRetryState(status, 1, DateUtils.addSeconds(now, 1), 1)
     }
   }
 
