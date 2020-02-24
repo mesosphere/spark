@@ -620,6 +620,7 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
 
     // Offer new resource to retry driver on a new agent
     val agent2 = SlaveID.newBuilder().setValue("s2").build()
+    Thread.sleep(1500)
     scheduler.resourceOffers(driver, Collections.singletonList(offers(1)))
     taskStatus = TaskStatus.newBuilder()
       .setTaskId(TaskID.newBuilder().setValue(response.submissionId).build())
