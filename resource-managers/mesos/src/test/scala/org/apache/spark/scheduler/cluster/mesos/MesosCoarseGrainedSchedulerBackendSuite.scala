@@ -339,6 +339,90 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     assert(taskInfos.length == 2)
   }
 
+  test("scheduler backend suppresses mesos offers when max core count reached") {
+    val executorCores = 2
+    val executors = 2
+    setBackend(Map(
+      "spark.executor.cores" -> executorCores.toString(),
+      "spark.cores.max" -> (executorCores * executors).toString()))
+
+    val executorMemory = backend.executorMemory(sc)
+    offerResources(List(
+      Resources(executorMemory, executorCores),
+      Resources(executorMemory, executorCores),
+      Resources(executorMemory, executorCores)))
+
+    assert(backend.getTaskCount() == 2)
+    verify(driver, times(1)).suppressOffers()
+
+    // Finishing at least one task should trigger a revive
+    val status = createTaskStatus("0", "s1", TaskState.TASK_FAILED)
+    backend.statusUpdate(driver, status)
+    verify(driver, times(1)).reviveOffers()
+
+    offerResources(List(
+      Resources(executorMemory, executorCores)))
+    verify(driver, times(2)).suppressOffers()
+  }
+
+  test("scheduler backend suppresses mesos offers when the executor cap is reached") {
+    val executorCores = 1
+    val executors = 10
+    setBackend(Map(
+      "spark.executor.cores" -> executorCores.toString(),
+      "spark.cores.max" -> (executorCores * executors).toString()))
+
+    val executorMemory = backend.executorMemory(sc)
+    offerResources(List(
+      Resources(executorMemory, executorCores),
+      Resources(executorMemory, executorCores),
+      Resources(executorMemory, executorCores)))
+
+    assert(backend.getTaskCount() == 3)
+    verify(driver, times(0)).suppressOffers()
+
+    assert(backend.doRequestTotalExecutors(3).futureValue)
+    offerResources(List(
+      Resources(executorMemory, executorCores)))
+    verify(driver, times(1)).suppressOffers()
+
+    assert(backend.doRequestTotalExecutors(2).futureValue)
+    verify(driver, times(0)).reviveOffers()
+
+    // Finishing at least one task should trigger a revive
+    val status = createTaskStatus("0", "s1", TaskState.TASK_FAILED)
+    backend.statusUpdate(driver, status)
+    verify(driver, times(1)).reviveOffers()
+
+    offerResources(List(
+      Resources(executorMemory, executorCores)))
+    verify(driver, times(2)).suppressOffers()
+  }
+
+  test("scheduler periodically revives mesos offers if needed") {
+    val executorCores = 1
+    val executors = 3
+    setBackend(Map(
+      "spark.mesos.scheduler.revive.interval" -> "1s",
+      "spark.executor.cores" -> executorCores.toString(),
+      "spark.cores.max" -> (executorCores * executors).toString()))
+
+    val executorMemory = backend.executorMemory(sc)
+    offerResources(List(
+      Resources(executorMemory, executorCores)))
+
+    assert(backend.getTaskCount() == 1)
+    verify(driver, times(0)).suppressOffers()
+
+    // Verify that offers are revived every second
+    Thread.sleep(1500)
+    verify(driver, times(1)).reviveOffers()
+
+    Thread.sleep(1000)
+    verify(driver, times(2)).reviveOffers()
+
+  }
+
   test("mesos doesn't register twice with the same shuffle service") {
     setBackend(Map(SHUFFLE_SERVICE_ENABLED.key -> "true"))
     val (mem, cpu) = (backend.executorMemory(sc), 4)

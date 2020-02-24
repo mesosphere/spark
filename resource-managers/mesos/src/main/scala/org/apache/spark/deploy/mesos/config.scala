@@ -140,4 +140,11 @@ package object config {
         "when launching drivers. Default is to accept all offers with sufficient resources.")
       .stringConf
       .createWithDefault("")
+
+  private[spark] val REVIVE_OFFERS_INTERVAL =
+    ConfigBuilder("spark.mesos.scheduler.revive.interval")
+      .doc("Amount of milliseconds between periodic revive calls to Mesos, when the job" +
+        "driver is not suppressing resource offers.")
+      .timeConf(TimeUnit.MILLISECONDS)
+      .createWithDefaultString("10s")
 }
