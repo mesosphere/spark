@@ -19,6 +19,7 @@ package org.apache.spark.scheduler.cluster.mesos
 
 import java.io.File
 import java.util.{Collections, List => JList, UUID}
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.ReentrantLock
 
@@ -40,7 +41,7 @@ import org.apache.spark.network.shuffle.mesos.MesosExternalShuffleClient
 import org.apache.spark.rpc.RpcEndpointAddress
 import org.apache.spark.scheduler.{SlaveLost, TaskSchedulerImpl}
 import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
-import org.apache.spark.util.Utils
+import org.apache.spark.util.{ThreadUtils, Utils}
 
 /**
  * A SchedulerBackend that runs tasks on Mesos, but uses "coarse-grained" tasks, where it holds
@@ -90,6 +91,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
 
   // Synchronization protected by stateLock
   private[this] var stopCalled: Boolean = false
+  private[this] var offersSuppressed: Boolean = false
 
   private val launcherBackend = new LauncherBackend() {
     override protected def conf: SparkConf = sc.conf
@@ -187,6 +189,10 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
   private val schedulerUuid: String = UUID.randomUUID().toString
   private val nextExecutorNumber = new AtomicLong()
 
+  private val reviveOffersExecutorService =
+    ThreadUtils.newDaemonSingleThreadScheduledExecutor("mesos-revive-thread")
+  private val reviveIntervalMs = conf.get(REVIVE_OFFERS_INTERVAL)
+
   override def start() {
     super.start()
 
@@ -218,6 +224,18 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
 
     launcherBackend.setState(SparkAppHandle.State.SUBMITTED)
     startScheduler(driver)
+
+    // Periodic check if there is a need to revive mesos offers
+    reviveOffersExecutorService.scheduleAtFixedRate(new Runnable {
+      override def run(): Unit = {
+        stateLock.synchronized {
+          if (!offersSuppressed) {
+            logDebug("scheduled mesos offers revive")
+            schedulerDriver.reviveOffers
+          }
+        }
+      }
+    }, reviveIntervalMs, reviveIntervalMs, TimeUnit.MILLISECONDS)
   }
 
   def createCommand(offer: Offer, numCores: Int, taskId: String): CommandInfo = {
@@ -360,6 +378,8 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
   override def resourceOffers(d: org.apache.mesos.SchedulerDriver, offers: JList[Offer]) {
     stateLock.synchronized {
       metricsSource.recordOffers(offers.size)
+      logInfo(s"Received ${offers.size} resource offers.")
+
       if (stopCalled) {
         logDebug("Ignoring offers during shutdown")
         // Driver should simply return a stopped status on race
@@ -370,9 +390,10 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
       }
 
       if (numExecutors >= executorLimit) {
-        logDebug("Executor limit reached. numExecutors: " + numExecutors +
-          " executorLimit: " + executorLimit)
         offers.asScala.map(_.getId).foreach(d.declineOffer)
+        logInfo("Executor limit reached. numExecutors: " + numExecutors +
+          " executorLimit: " + executorLimit + " . Suppressing further offers.")
+        suppressOffers(Option(d))
         launchingExecutors = false
         return
       } else {
@@ -381,8 +402,6 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
           localityWaitStartTime = System.currentTimeMillis()
         }
       }
-
-      logDebug(s"Received ${offers.size} resource offers.")
 
       val (matchedOffers, unmatchedOffers) = offers.asScala.partition { offer =>
         val offerAttributes = toAttributeMap(offer.getAttributesList)
@@ -416,6 +435,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
   private def handleMatchedOffers(
       driver: org.apache.mesos.SchedulerDriver, offers: mutable.Buffer[Offer]): Unit = {
     val tasks = buildMesosTasks(offers)
+    var suppressionRequired = false
     for (offer <- offers) {
       val offerAttributes = toAttributeMap(offer.getAttributesList)
       val offerMem = getResource(offer.getResourcesList, "mem")
@@ -455,6 +475,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
           Collections.singleton(offer.getId),
           offerTasks.asJava)
       } else if (totalCoresAcquired >= maxCores) {
+        suppressionRequired = true
         // Reject an offer for a configurable amount of time to avoid starving other frameworks
         metricsSource.recordDeclineFinished
         declineOffer(driver,
@@ -468,6 +489,11 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
           offer,
           Some("Offer was declined due to unmet task launch constraints."))
       }
+    }
+
+    if (suppressionRequired) {
+      logInfo("Max core number is reached. Suppressing further offers.")
+      suppressOffers(Option.empty)
     }
   }
 
@@ -696,9 +722,26 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
         }
         executorTerminated(d, slaveId, taskId, s"Executor finished with state $state")
         // In case we'd rejected everything before but have now lost a node
-        metricsSource.recordRevive
-        d.reviveOffers
+        if (state != TaskState.FINISHED) {
+          logInfo("Reviving offers due to a failed executor task.")
+          reviveOffers(Option(d))
+        }
       }
+    }
+  }
+
+  private def reviveOffers(driver: Option[org.apache.mesos.SchedulerDriver]): Unit = {
+    stateLock.synchronized {
+      metricsSource.recordRevive
+      offersSuppressed = false
+      driver.getOrElse(schedulerDriver).reviveOffers
+    }
+  }
+
+  private def suppressOffers(driver: Option[org.apache.mesos.SchedulerDriver]): Unit = {
+    stateLock.synchronized {
+      offersSuppressed = true
+      driver.getOrElse(schedulerDriver).suppressOffers
     }
   }
 
@@ -708,6 +751,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
   }
 
   override def stop() {
+    reviveOffersExecutorService.shutdownNow()
     stopSchedulerBackend()
     launcherBackend.setState(SparkAppHandle.State.FINISHED)
     launcherBackend.close()
@@ -791,7 +835,12 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
     // We don't truly know if we can fulfill the full amount of executors
     // since at coarse grain it depends on the amount of slaves available.
     logInfo("Capping the total amount of executors to " + requestedTotal)
+    val reviveNeeded = executorLimit < requestedTotal
     executorLimitOption = Some(requestedTotal)
+    if (reviveNeeded && schedulerDriver != null) {
+      logInfo("The executor limit increased. Reviving offers.")
+      reviveOffers(Option.empty)
+    }
     // Update the locality wait start time to continue trying for locality.
     localityWaitStartTime = System.currentTimeMillis()
     true
