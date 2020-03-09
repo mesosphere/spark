@@ -685,6 +685,9 @@ class StreamingContext private[streaming] (
           // executed twice in the case of a partial stop, all methods called here need to be
           // idempotent.
           Utils.tryLogNonFatalError {
+            unregisterProgressListener()
+          }
+          Utils.tryLogNonFatalError {
             scheduler.stop(stopGracefully)
           }
           // Removing the streamingSource to de-register the metrics on stop()
@@ -693,9 +696,6 @@ class StreamingContext private[streaming] (
           }
           Utils.tryLogNonFatalError {
             uiTab.foreach(_.detach())
-          }
-          Utils.tryLogNonFatalError {
-            unregisterProgressListener()
           }
           StreamingContext.setActiveContext(null)
           Utils.tryLogNonFatalError {
