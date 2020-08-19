@@ -85,27 +85,32 @@ private[spark] class BasicExecutorFeatureStep(
     // name as the hostname.  This preserves uniqueness since the end of name contains
     // executorId
     val hostname = name.substring(Math.max(0, name.length - 63))
-    val executorMemoryQuantity = new QuantityBuilder(false)
-      .withAmount(s"${executorMemoryTotal}Mi")
-      .build()
-    val executorCpuQuantity = new QuantityBuilder(false)
-      .withAmount(executorCoresRequest)
-      .build()
-    val executorExtraClasspathEnv = executorExtraClasspath.map { cp =>
-      new EnvVarBuilder()
-        .withName(ENV_CLASSPATH)
-        .withValue(cp)
-        .build()
-    }
-    val executorExtraJavaOptionsEnv = kubernetesConf
-      .get(EXECUTOR_JAVA_OPTIONS)
-      .map { opts =>
-        val subsOpts = Utils.substituteAppNExecIds(opts, kubernetesConf.appId,
-          kubernetesConf.roleSpecificConf.executorId)
-        val delimitedOpts = Utils.splitCommandString(subsOpts)
-        delimitedOpts.zipWithIndex.map {
-          case (opt, index) =>
-            new EnvVarBuilder().withName(s"$ENV_JAVA_OPT_PREFIX$index").withValue(opt).build()
+      // Remove non-word characters from the start of the hostname
+      .replaceAll("^[^\\w]+", "")
+      // Replace dangerous characters in the remaining string with a safe alternative.
+      .replaceAll("[^\\w-]+", "_")
+
+    val executorMemoryQuantity = new Quantity(s"${executorMemoryTotal}Mi")
+    val executorCpuQuantity = new Quantity(executorCoresRequest)
+
+    val executorResourceQuantities =
+      KubernetesUtils.buildResourcesQuantities(SPARK_EXECUTOR_PREFIX,
+        kubernetesConf.sparkConf)
+
+    val executorEnv: Seq[EnvVar] = {
+        (Seq(
+          (ENV_DRIVER_URL, driverUrl),
+          (ENV_EXECUTOR_CORES, executorCores.toString),
+          (ENV_EXECUTOR_MEMORY, executorMemoryString),
+          (ENV_APPLICATION_ID, kubernetesConf.appId),
+          // This is to set the SPARK_CONF_DIR to be /opt/spark/conf
+          (ENV_SPARK_CONF_DIR, SPARK_CONF_DIR_INTERNAL),
+          (ENV_EXECUTOR_ID, kubernetesConf.executorId)
+        ) ++ kubernetesConf.environment).map { case (k, v) =>
+          new EnvVarBuilder()
+            .withName(k)
+            .withValue(v)
+            .build()
         }
       }.getOrElse(Seq.empty[EnvVar])
     val executorEnv = (Seq(
@@ -152,9 +157,7 @@ private[spark] class BasicExecutorFeatureStep(
       .addToArgs("executor")
       .build()
     val containerWithLimitCores = executorLimitCores.map { limitCores =>
-      val executorCpuLimitQuantity = new QuantityBuilder(false)
-        .withAmount(limitCores)
-        .build()
+      val executorCpuLimitQuantity = new Quantity(limitCores)
       new ContainerBuilder(executorContainer)
         .editResources()
           .addToLimits("cpu", executorCpuLimitQuantity)

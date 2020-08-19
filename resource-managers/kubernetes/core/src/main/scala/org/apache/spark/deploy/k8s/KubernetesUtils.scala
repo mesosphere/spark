@@ -19,7 +19,26 @@ package org.apache.spark.deploy.k8s
 import org.apache.spark.SparkConf
 import org.apache.spark.util.Utils
 
-private[spark] object KubernetesUtils {
+import scala.collection.JavaConverters._
+
+import io.fabric8.kubernetes.api.model.{Container, ContainerBuilder, ContainerStateRunning, ContainerStateTerminated, ContainerStateWaiting, ContainerStatus, Pod, PodBuilder, Quantity}
+import io.fabric8.kubernetes.client.KubernetesClient
+import org.apache.commons.codec.binary.Hex
+import org.apache.hadoop.fs.{FileSystem, Path}
+
+import org.apache.spark.{SparkConf, SparkException}
+import org.apache.spark.deploy.SparkHadoopUtil
+import org.apache.spark.deploy.k8s.Config.KUBERNETES_FILE_UPLOAD_PATH
+import org.apache.spark.internal.Logging
+import org.apache.spark.launcher.SparkLauncher
+import org.apache.spark.resource.ResourceUtils
+import org.apache.spark.util.{Clock, SystemClock, Utils}
+import org.apache.spark.util.Utils.getHadoopFileSystem
+
+private[spark] object KubernetesUtils extends Logging {
+
+  private val systemClock = new SystemClock()
+  private lazy val RNG = new SecureRandom()
 
   /**
    * Extract and parse Spark configuration properties with a given name prefix and
@@ -44,7 +63,43 @@ private[spark] object KubernetesUtils {
    * - File URIs with scheme local:// resolve to just the path of the URI.
    * - Otherwise, the URIs are returned as-is.
    */
-  def resolveFileUrisAndPath(fileUris: Iterable[String]): Iterable[String] = {
+  def uniqueID(clock: Clock = systemClock): String = {
+    val random = new Array[Byte](3)
+    synchronized {
+      RNG.nextBytes(random)
+    }
+
+    val time = java.lang.Long.toHexString(clock.getTimeMillis() & 0xFFFFFFFFFFL)
+    Hex.encodeHexString(random) + time
+  }
+
+  /**
+   * This function builds the Quantity objects for each resource in the Spark resource
+   * configs based on the component name(spark.driver.resource or spark.executor.resource).
+   * It assumes we can use the Kubernetes device plugin format: vendor-domain/resource.
+   * It returns a set with a tuple of vendor-domain/resource and Quantity for each resource.
+   */
+  def buildResourcesQuantities(
+      componentName: String,
+      sparkConf: SparkConf): Map[String, Quantity] = {
+    val requests = ResourceUtils.parseAllResourceRequests(sparkConf, componentName)
+    requests.map { request =>
+      val vendorDomain = if (request.vendor.isPresent()) {
+        request.vendor.get()
+      } else {
+        throw new SparkException(s"Resource: ${request.id.resourceName} was requested, " +
+          "but vendor was not specified.")
+      }
+      val quantity = new Quantity(request.amount.toString)
+      (KubernetesConf.buildKubernetesResourceName(vendorDomain, request.id.resourceName), quantity)
+    }.toMap
+  }
+
+  /**
+   * Upload files and modify their uris
+   */
+  def uploadAndTransformFileUris(fileUris: Iterable[String], conf: Option[SparkConf] = None)
+    : Iterable[String] = {
     fileUris.map { uri =>
       resolveFileUri(uri)
     }
