@@ -408,6 +408,13 @@ package object config {
       .stringConf
       .createOptional
 
+  private[spark] val REVIVE_OFFERS_INTERVAL =
+    ConfigBuilder("spark.mesos.scheduler.revive.interval")
+      .doc("Amount of milliseconds between periodic revive calls to Mesos, when the job" +
+        "driver is not suppressing resource offers.")
+      .timeConf(TimeUnit.MILLISECONDS)
+      .createWithDefaultString("10s")
+
   private[spark] val DRIVER_ENV_PREFIX = "spark.mesos.driverEnv."
   private[spark] val DISPATCHER_DRIVER_DEFAULT_PREFIX = "spark.mesos.dispatcher.driverDefault."
 }
