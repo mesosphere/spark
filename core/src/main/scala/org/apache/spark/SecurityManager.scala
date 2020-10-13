@@ -354,7 +354,7 @@ private[spark] class SecurityManager(
   private def secretKeyFromFile(): Option[String] = {
     sparkConf.get(authSecretFileConf).flatMap { secretFilePath =>
       sparkConf.getOption(SparkLauncher.SPARK_MASTER).map {
-        case k8sRegex() =>
+        case k8sRegex() | mesosRegex() =>
           val secretFile = new File(secretFilePath)
           require(secretFile.isFile, s"No file found containing the secret key at $secretFilePath.")
           val base64Key = Base64.getEncoder.encodeToString(Files.readAllBytes(secretFile.toPath))
@@ -362,7 +362,7 @@ private[spark] class SecurityManager(
           base64Key
         case _ =>
           throw new IllegalArgumentException(
-            "Secret keys provided via files is only allowed in Kubernetes mode.")
+            "Secret keys provided via files is only allowed in Mesos or Kubernetes mode.")
       }
     }
   }
@@ -392,6 +392,7 @@ private[spark] class SecurityManager(
 private[spark] object SecurityManager {
 
   val k8sRegex = "k8s.*".r
+  val mesosRegex = "mesos.*".r
   val SPARK_AUTH_CONF = NETWORK_AUTH_ENABLED.key
   val SPARK_AUTH_SECRET_CONF = AUTH_SECRET.key
   // This is used to set auth secret to an executor's env variable. It should have the same

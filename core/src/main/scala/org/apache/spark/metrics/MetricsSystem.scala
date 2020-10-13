@@ -162,6 +162,7 @@ private[spark] class MetricsSystem private (
     sources += source
     try {
       val regName = buildRegistryName(source)
+      logInfo(s"Registering source: $regName")
       registry.register(regName, source.metricRegistry)
     } catch {
       case e: IllegalArgumentException => logInfo("Metrics already registered", e)
@@ -171,6 +172,7 @@ private[spark] class MetricsSystem private (
   def removeSource(source: Source): Unit = {
     sources -= source
     val regName = buildRegistryName(source)
+    logInfo(s"Removing source: $regName")
     registry.removeMatching((name: String, _: Metric) => name.startsWith(regName))
   }
 
@@ -197,6 +199,7 @@ private[spark] class MetricsSystem private (
     sinkConfigs.foreach { kv =>
       val classPath = kv._2.getProperty("class")
       if (null != classPath) {
+        logInfo(s"Initializing sink: $classPath")
         try {
           if (kv._1 == "servlet") {
             val servlet = Utils.classForName[MetricsServlet](classPath)
@@ -219,7 +222,7 @@ private[spark] class MetricsSystem private (
           }
         } catch {
           case e: Exception =>
-            logError("Sink class " + classPath + " cannot be instantiated")
+            logError(s"Sink class $classPath cannot be instantiated")
             throw e
         }
       }

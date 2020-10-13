@@ -207,8 +207,6 @@ can find the results of the driver from the Mesos Web UI.
 
 To use cluster mode, you must start the `MesosClusterDispatcher` in your cluster via the `sbin/start-mesos-dispatcher.sh` script,
 passing in the Mesos master URL (e.g: mesos://host:5050). This starts the `MesosClusterDispatcher` as a daemon running on the host.
-Note that the `MesosClusterDispatcher` does not support authentication.  You should ensure that all network access to it is
-protected (port 7077 by default).
 
 By setting the Mesos proxy config property (requires mesos version >= 1.4), `--conf spark.mesos.proxy.baseURL=http://localhost:5050` when launching the dispatcher, the mesos sandbox URI for each driver is added to the mesos dispatcher UI.
 
@@ -379,6 +377,16 @@ See the [configuration page](configuration.html) for information on Spark config
     If set to <code>true</code>, runs over Mesos clusters in "coarse-grained" sharing mode, where Spark acquires one long-lived Mesos task on each machine.
     If set to <code>false</code>, runs over Mesos cluster in "fine-grained" sharing mode, where one Mesos task is created per Spark task.
     Detailed information in <a href="running-on-mesos.html#mesos-run-modes">'Mesos Run Modes'</a>.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.mesos.checkpoint</code></td>
+  <td>false</td>
+  <td>
+    If set to true, the mesos agents that are running the Spark executors will write the framework pid, executor pids and status updates to disk. 
+    If the agent exits (e.g., due to a crash or as part of upgrading Mesos), this checkpointed data allows the restarted agent to 
+    reconnect to executors that were started by the old instance of the agent. Enabling checkpointing improves fault tolerance,
+    at the cost of a (usually small) increase in disk I/O.
   </td>
   <td>0.6.0</td>
 </tr>

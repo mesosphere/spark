@@ -32,12 +32,14 @@ import org.scalatestplus.mockito.MockitoSugar
 
 import org.apache.spark.{LocalSparkContext, SecurityManager, SparkConf, SparkContext, SparkFunSuite}
 import org.apache.spark.deploy.mesos.{config => mesosConfig}
+import org.apache.spark.deploy.mesos.config._
+import org.apache.spark.internal.config
 import org.apache.spark.internal.config._
 import org.apache.spark.network.shuffle.mesos.MesosExternalBlockStoreClient
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.rpc.{RpcAddress, RpcEndpointRef}
-import org.apache.spark.scheduler.TaskSchedulerImpl
-import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{RegisterExecutor}
+import org.apache.spark.scheduler.{TaskSchedulerImpl, WorkerOffer}
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.RegisterExecutor
 import org.apache.spark.scheduler.cluster.mesos.Utils._
 
 class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
@@ -110,7 +112,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
 
   test("mesos supports spark.executor.cores") {
     val executorCores = 4
-    setBackend(Map(EXECUTOR_CORES.key -> executorCores.toString))
+    setBackend(Map(config.EXECUTOR_CORES.key -> executorCores.toString))
 
     val executorMemory = backend.executorMemory(sc)
     val offers = List(Resources(executorMemory * 2, executorCores + 1))
@@ -180,6 +182,60 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
   }
 
 
+  test("mesos acquires spark.mesos.executor.gpus number of gpus per executor") {
+    setBackend(Map("spark.mesos.gpus.max" -> "5",
+                   "spark.mesos.executor.gpus" -> "2"))
+
+    val executorMemory = backend.executorMemory(sc)
+    offerResources(List(Resources(executorMemory, 1, 5)))
+
+    val taskInfos = verifyTaskLaunched(driver, "o1")
+    assert(taskInfos.length == 1)
+
+    val gpus = backend.getResource(taskInfos.head.getResourcesList, "gpus")
+    assert(gpus == 2)
+  }
+
+
+  test("mesos declines offers that cannot satisfy spark.mesos.executor.gpus") {
+    setBackend(Map("spark.mesos.gpus.max" -> "5",
+                   "spark.mesos.executor.gpus" -> "2"))
+
+    val executorMemory = backend.executorMemory(sc)
+    offerResources(List(Resources(executorMemory, 1, 1)))
+    verifyDeclinedOffer(driver, createOfferId("o1"))
+  }
+
+
+  test("mesos declines offers where spark.mesos.gpus.max less than spark.mesos.executor.gpus") {
+    setBackend(Map("spark.mesos.gpus.max" -> "2",
+                   "spark.mesos.executor.gpus" -> "5"))
+
+    val executorMemory = backend.executorMemory(sc)
+    offerResources(List(Resources(executorMemory, 1, 5)))
+    verifyDeclinedOffer(driver, createOfferId("o1"))
+  }
+
+
+  test("mesos declines offers that exceed spark.mesos.gpus.max") {
+    setBackend(Map("spark.mesos.gpus.max" -> "5",
+                   "spark.mesos.executor.gpus" -> "2"))
+
+    val executorMemory = backend.executorMemory(sc)
+    offerResources(List(Resources(executorMemory, 1, 2),
+                        Resources(executorMemory, 1, 2),
+                        Resources(executorMemory, 1, 2)))
+
+    val taskInfos1 = verifyTaskLaunched(driver, "o1")
+    assert(backend.getResource(taskInfos1.head.getResourcesList, "gpus") == 2)
+
+    val taskInfos2 = verifyTaskLaunched(driver, "o2")
+    assert(backend.getResource(taskInfos2.head.getResourcesList, "gpus") == 2)
+
+    verifyDeclinedOffer(driver, createOfferId("o3"))
+  }
+
+
   test("mesos declines offers that violate attribute constraints") {
     setBackend(Map(mesosConfig.CONSTRAINTS.key -> "x:true"))
     offerResources(List(Resources(backend.executorMemory(sc), 4)))
@@ -204,7 +260,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     val executorCores = 3
     setBackend(Map(
       CORES_MAX.key -> maxCores.toString,
-      EXECUTOR_CORES.key -> executorCores.toString
+      config.EXECUTOR_CORES.key -> executorCores.toString
     ))
     val executorMemory = backend.executorMemory(sc)
     offerResources(List(
@@ -220,7 +276,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     val executorCores = 2
     setBackend(Map(
       CORES_MAX.key -> maxCores.toString,
-      EXECUTOR_CORES.key -> executorCores.toString
+      config.EXECUTOR_CORES.key -> executorCores.toString
     ))
     val executorMemory = backend.executorMemory(sc)
     offerResources(List(
@@ -236,7 +292,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
   test("mesos assigns tasks round-robin on offers") {
     val executorCores = 4
     val maxCores = executorCores * 2
-    setBackend(Map(EXECUTOR_CORES.key -> executorCores.toString,
+    setBackend(Map(config.EXECUTOR_CORES.key -> executorCores.toString,
       CORES_MAX.key -> maxCores.toString))
 
     val executorMemory = backend.executorMemory(sc)
@@ -250,7 +306,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
 
   test("mesos creates multiple executors on a single slave") {
     val executorCores = 4
-    setBackend(Map(EXECUTOR_CORES.key -> executorCores.toString))
+    setBackend(Map(config.EXECUTOR_CORES.key -> executorCores.toString))
 
     // offer with room for two executors
     val executorMemory = backend.executorMemory(sc)
@@ -341,6 +397,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
 
     val taskScheduler = mock[TaskSchedulerImpl]
     when(taskScheduler.sc).thenReturn(sc)
+    when(taskScheduler.resourceOffers(any[IndexedSeq[WorkerOffer]])).thenReturn(Seq.empty)
 
     val driver = mock[SchedulerDriver]
     when(driver.start()).thenReturn(Protos.Status.DRIVER_RUNNING)
@@ -397,6 +454,41 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
         markRegistered()
         assert(failoverTimeout.isDefined)
         assert(failoverTimeout.get.equals(failoverTimeoutIn))
+        driver
+      }
+    }
+
+    backend.start()
+  }
+
+  test("checkpointing is enabled in created scheduled driver") {
+    val checkpointExpected = true
+    initializeSparkConf(Map(CHECKPOINT.key -> checkpointExpected.toString))
+    sc = new SparkContext(sparkConf)
+
+    val taskScheduler = mock[TaskSchedulerImpl]
+    when(taskScheduler.sc).thenReturn(sc)
+
+    val driver = mock[SchedulerDriver]
+    when(driver.start()).thenReturn(Protos.Status.DRIVER_RUNNING)
+
+    val securityManager = mock[SecurityManager]
+
+    val backend = new MesosCoarseGrainedSchedulerBackend(
+      taskScheduler, sc, "master", securityManager) {
+      override protected def createSchedulerDriver(
+          masterUrl: String,
+          scheduler: Scheduler,
+          sparkUser: String,
+          appName: String,
+          conf: SparkConf,
+          webuiUrl: Option[String] = None,
+          checkpoint: Option[Boolean] = None,
+          failoverTimeout: Option[Double] = None,
+          frameworkId: Option[String] = None): SchedulerDriver = {
+        markRegistered()
+        assert(checkpoint.isDefined)
+        assert(checkpoint.get.equals(checkpointExpected))
         driver
       }
     }
@@ -542,6 +634,21 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
 
     // Add " 0" to the taskName to match the executor number that is appended
     assert(launchedTasks.head.getName == "test-mesos-dynamic-alloc 0")
+  }
+
+  test("mesos sets different task ids across executions") {
+    setBackend()
+    var offers = List(Resources(backend.executorMemory(sc), 1))
+    offerResources(offers)
+    val firstLaunchTaskId = verifyTaskLaunched(driver, "o1").head.getTaskId.getValue
+    sc.stop()
+
+    setBackend()
+    offers = List(Resources(backend.executorMemory(sc), 1))
+    offerResources(offers)
+    val secondLaunchTaskId = verifyTaskLaunched(driver, "o1").head.getTaskId.getValue
+
+    assert(firstLaunchTaskId != secondLaunchTaskId)
   }
 
   test("mesos sets configurable labels on tasks") {
@@ -821,7 +928,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     taskScheduler = mock[TaskSchedulerImpl]
     when(taskScheduler.nodeBlacklist).thenReturn(Set[String]())
     when(taskScheduler.sc).thenReturn(sc)
-
+    when(taskScheduler.resourceOffers(any[IndexedSeq[WorkerOffer]])).thenReturn(Seq.empty)
     externalShuffleClient = mock[MesosExternalBlockStoreClient]
 
     backend = createSchedulerBackend(taskScheduler, driver, externalShuffleClient)
