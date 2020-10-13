@@ -25,7 +25,7 @@ import scala.concurrent.duration._
 import org.apache.mesos.{Protos, Scheduler, SchedulerDriver}
 import org.apache.mesos.Protos._
 import org.mockito.ArgumentMatchers.{any, anyInt, anyLong, anyString, eq => meq}
-import org.mockito.Mockito.{times, verify, when}
+import org.mockito.Mockito.{doReturn, times, verify, when}
 import org.scalatest.BeforeAndAfter
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatestplus.mockito.MockitoSugar
@@ -108,6 +108,30 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     // Launches a new task on a valid offer from the same slave
     offerResources(List(offer2))
     verifyTaskLaunched(driver, "o2")
+  }
+
+  test("mesos declines offers from blacklisted slave and keeps failure tasks count") {
+    setBackend()
+
+    // launches a task on a valid offer on slave s1
+    val minMem = backend.executorMemory(sc) + 1024
+    val minCpu = 4
+    val offer1 = Resources(minMem, minCpu)
+    offerResources(List(offer1))
+    verifyTaskLaunched(driver, "o1")
+
+    // for any reason executor (aka mesos task) failed on s1
+    val status = createTaskStatus("0", "s1", TaskState.TASK_FAILED)
+    backend.statusUpdate(driver, status)
+    doReturn(Set("hosts1"), Nil: _*).when(taskScheduler).nodeBlacklist()
+
+    val offer2 = Resources(minMem, minCpu)
+    // Offer resources from the same slave
+    offerResources(List(offer2))
+    // but since it's blacklisted the offer is declined
+    verifyDeclinedOffer(driver, createOfferId("o1"))
+    assert(backend.getBlacklistedAgentCount() == 1)
+    assert(backend.getTaskFailureCount() == 1)
   }
 
   test("mesos supports spark.executor.cores") {
