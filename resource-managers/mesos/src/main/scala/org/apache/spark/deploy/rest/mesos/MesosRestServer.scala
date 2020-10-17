@@ -81,7 +81,9 @@ private[mesos] class MesosSubmitRequestServlet(
    * This does not currently consider fields used by python applications since python
    * is not supported in mesos cluster mode yet.
    */
-  private def buildDriverDescription(request: CreateSubmissionRequest): MesosDriverDescription = {
+  // Visible for testing
+  private[rest] def buildDriverDescription(
+      request: CreateSubmissionRequest): MesosDriverDescription = {
     // Required fields, including the main class because python is not yet supported
     val appResource = Option(request.appResource).getOrElse {
       throw new SubmitRestMissingFieldException("Application jar 'appResource' is missing.")
