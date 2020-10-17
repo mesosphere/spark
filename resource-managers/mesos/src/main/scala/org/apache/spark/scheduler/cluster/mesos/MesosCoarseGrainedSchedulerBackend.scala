@@ -208,7 +208,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
       sc.appName,
       sc.conf,
       sc.conf.get(DRIVER_WEBUI_URL).orElse(sc.ui.map(_.webUrl)),
-      None,
+      sc.conf.get(CHECKPOINT),
       Some(sc.conf.get(DRIVER_FAILOVER_TIMEOUT)),
       sc.conf.get(DRIVER_FRAMEWORK_ID).map(_ + suffix)
     )
@@ -738,6 +738,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
       // removeExecutor() internally will send a message to the driver endpoint but
       // the driver endpoint is not available now, otherwise an exception will be thrown.
       if (!stopCalled) {
+        logInfo(s"Executor terminated, removing executor $taskId")
         removeExecutor(taskId, SlaveLost(reason))
       }
       slaves(slaveId).taskIDs.remove(taskId)
