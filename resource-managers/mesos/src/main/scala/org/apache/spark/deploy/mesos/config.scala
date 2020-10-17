@@ -397,6 +397,16 @@ package object config {
       .stringConf
       .createOptional
 
+  private[spark] val ENFORCE_DISPATCHER_ROLE =
+    ConfigBuilder("spark.mesos.dispatcher.role.enforce")
+      .doc("When enabled, Mesos Dispatcher will reject all submissions which attempt to override " +
+        "<pre>spark.mesos.role</pre> the Dispatcher is using itself. This flag should be " +
+        "enabled when all the applications submitted to a single Dispatcher must be enforced " +
+        "to use the same role.")
+      .version("3.0.1")
+      .booleanConf
+      .createWithDefault(false)
+
   private[spark] val DRIVER_ENV_PREFIX = "spark.mesos.driverEnv."
   private[spark] val DISPATCHER_DRIVER_DEFAULT_PREFIX = "spark.mesos.dispatcher.driverDefault."
 }

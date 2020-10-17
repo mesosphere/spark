@@ -25,6 +25,7 @@ import javax.servlet.http.HttpServletResponse
 
 import org.apache.spark.{SPARK_VERSION => sparkVersion, SparkConf}
 import org.apache.spark.deploy.Command
+import org.apache.spark.deploy.mesos.config._
 import org.apache.spark.deploy.mesos.MesosDriverDescription
 import org.apache.spark.deploy.rest._
 import org.apache.spark.internal.config
@@ -108,8 +109,16 @@ private[mesos] class MesosSubmitRequestServlet(
     val driverCores = sparkProperties.get(config.DRIVER_CORES.key)
     val name = request.sparkProperties.getOrElse("spark.app.name", mainClass)
 
+    val defaultConf = this.conf.getAllWithPrefix(DISPATCHER_DRIVER_DEFAULT_PREFIX).toMap
+    val driverConf = new SparkConf(false).setAll(defaultConf).setAll(sparkProperties)
+
+    // role propagation and enforcement
+    validateRole(sparkProperties)
+    getDriverRoleOrDefault(sparkProperties).foreach { role =>
+      driverConf.set(ROLE.key, role)
+    }
+
     // Construct driver description
-    val conf = new SparkConf(false).setAll(sparkProperties)
     val extraClassPath = driverExtraClassPath.toSeq.flatMap(_.split(File.pathSeparator))
     val extraLibraryPath = driverExtraLibraryPath.toSeq.flatMap(_.split(File.pathSeparator))
     val defaultJavaOpts = driverDefaultJavaOptions.map(Utils.splitCommandString)
@@ -129,7 +138,38 @@ private[mesos] class MesosSubmitRequestServlet(
 
     new MesosDriverDescription(
       name, appResource, actualDriverMemory + actualDriverMemoryOverhead, actualDriverCores,
-      actualSuperviseDriver, command, request.sparkProperties, submissionId, submitDate)
+      actualSuperviseDriver, command, driverConf.getAll.toMap, submissionId, submitDate)
+  }
+
+  /**
+   * Validates that 'spark.mesos.role' provided via spark-submit doesn't override the
+   * default Dispatcher role when 'spark.mesos.dispatcher.role.enforce' is enabled.
+   * In case 'spark.mesos.role' is not set for Dispatcher, no role is enforced and
+   * users can submit jobs with any role.
+   */
+  private[mesos] def validateRole(properties: Map[String, String]): Unit = {
+    properties.get(ROLE.key).filter(_.nonEmpty).foreach { driverRole =>
+      conf.getOption(ROLE.key).filter(_.nonEmpty)
+        .foreach { dispatcherRole =>
+          val roleEnforcementEnabled = conf.get(ENFORCE_DISPATCHER_ROLE)
+
+          if (dispatcherRole != driverRole && roleEnforcementEnabled) {
+            throw new SubmitRestProtocolException(
+              "Dispatcher is running with role enforcement enabled but submitted Driver" +
+                s" attempts to override the default role. Enforced role: $dispatcherRole," +
+                s" Driver role: $driverRole"
+            )
+          }
+        }
+    }
+  }
+
+  private[mesos] def getDriverRoleOrDefault(properties: Map[String, String]): Option[String] = {
+    if (properties.get(ROLE.key).isDefined) {
+      properties.get(ROLE.key)
+    } else {
+      conf.getOption(ROLE.key)
+    }
   }
 
   protected override def handleSubmit(

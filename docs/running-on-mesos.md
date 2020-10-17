@@ -735,6 +735,17 @@ See the [configuration page](configuration.html) for information on Spark config
   <td>2.1.0</td>
 </tr>
 <tr>
+  <td><code>spark.mesos.dispatcher.role.enforce</code></td>
+  <td><code>false</code></td>
+  <td>
+    When enabled, Mesos Dispatcher will reject all submissions which attempt to override
+    <pre>spark.mesos.role</pre> the Dispatcher is using itself. This flag should be
+    enabled when all the applications submitted to a single Dispatcher must be enforced
+    to use the same role.
+  </td>
+  <td>3.0.1</td>
+</tr>
+<tr>
   <td><code>spark.mesos.gpus.max</code></td>
   <td><code>0</code></td>
   <td>
