@@ -18,7 +18,7 @@
 package org.apache.spark.scheduler.cluster.mesos
 
 import java.io.File
-import java.util.{Collections, List => JList}
+import java.util.{Collections, UUID, List => JList}
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.ReentrantLock
@@ -175,17 +175,12 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
       conf.get(config.SHUFFLE_REGISTRATION_TIMEOUT))
   }
 
-  private var nextMesosTaskId = 0
-
   @volatile var appId: String = _
 
   private var schedulerDriver: SchedulerDriver = _
 
-  def newMesosTaskId(): String = {
-    val id = nextMesosTaskId
-    nextMesosTaskId += 1
-    id.toString
-  }
+  private val schedulerUuid: String = UUID.randomUUID().toString
+  private val nextExecutorNumber = new AtomicLong()
 
   override def start(): Unit = {
     super.start()
@@ -505,7 +500,8 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
         if (canLaunchTask(slaveId, offer.getHostname, resources)) {
           // Create a task
           launchTasks = true
-          val taskId = newMesosTaskId()
+          val taskSeqNumber = nextExecutorNumber.getAndIncrement()
+          val taskId = s"${schedulerUuid}-$taskSeqNumber"
           val offerCPUs = getResource(resources, "cpus").toInt
           val taskGPUs = Math.min(
             Math.max(0, maxGpus - totalGpusAcquired), getResource(resources, "gpus").toInt)
@@ -519,10 +515,10 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
             partitionTaskResources(resources, taskCPUs, taskMemory, taskGPUs)
 
           val taskBuilder = MesosTaskInfo.newBuilder()
-            .setTaskId(TaskID.newBuilder().setValue(taskId.toString).build())
+            .setTaskId(TaskID.newBuilder().setValue(taskId).build())
             .setSlaveId(offer.getSlaveId)
             .setCommand(createCommand(offer, taskCPUs + extraCoresPerExecutor, taskId))
-            .setName(s"${sc.appName} $taskId")
+            .setName(s"${sc.appName} $taskSeqNumber")
             .setLabels(MesosProtoUtils.mesosLabels(taskLabels))
             .addAllResources(resourcesToUse.asJava)
             .setContainer(getContainerInfo(sc.conf))
