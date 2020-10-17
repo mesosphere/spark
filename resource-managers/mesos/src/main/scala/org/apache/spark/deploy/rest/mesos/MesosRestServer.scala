@@ -81,7 +81,9 @@ private[mesos] class MesosSubmitRequestServlet(
    * This does not currently consider fields used by python applications since python
    * is not supported in mesos cluster mode yet.
    */
-  private def buildDriverDescription(request: CreateSubmissionRequest): MesosDriverDescription = {
+  // Visible for testing
+  private[rest] def buildDriverDescription(
+      request: CreateSubmissionRequest): MesosDriverDescription = {
     // Required fields, including the main class because python is not yet supported
     val appResource = Option(request.appResource).getOrElse {
       throw new SubmitRestMissingFieldException("Application jar 'appResource' is missing.")
@@ -109,13 +111,12 @@ private[mesos] class MesosSubmitRequestServlet(
     val driverCores = sparkProperties.get(config.DRIVER_CORES.key)
     val name = request.sparkProperties.getOrElse("spark.app.name", mainClass)
 
-    val defaultConf = this.conf.getAllWithPrefix(DISPATCHER_DRIVER_DEFAULT_PREFIX).toMap
-    val driverConf = new SparkConf(false).setAll(defaultConf).setAll(sparkProperties)
+    val conf = new SparkConf(false).setAll(sparkProperties)
 
     // role propagation and enforcement
     validateRole(sparkProperties)
     getDriverRoleOrDefault(sparkProperties).foreach { role =>
-      driverConf.set(ROLE.key, role)
+      conf.set(ROLE.key, role)
     }
 
     // Construct driver description
@@ -138,7 +139,7 @@ private[mesos] class MesosSubmitRequestServlet(
 
     new MesosDriverDescription(
       name, appResource, actualDriverMemory + actualDriverMemoryOverhead, actualDriverCores,
-      actualSuperviseDriver, command, driverConf.getAll.toMap, submissionId, submitDate)
+      actualSuperviseDriver, command, conf.getAll.toMap, submissionId, submitDate)
   }
 
   /**

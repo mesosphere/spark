@@ -38,24 +38,6 @@ class MesosSubmitRequestServletSuite extends SparkFunSuite
     request
   }
 
-  test("test buildDriverDescription applies default settings from dispatcher conf to Driver") {
-    val conf = new SparkConf(loadDefaults = false)
-
-    conf.set(DISPATCHER_DRIVER_DEFAULT_PREFIX + NETWORK_NAME.key, "test_network")
-    conf.set(DISPATCHER_DRIVER_DEFAULT_PREFIX + NETWORK_LABELS.key, "k0:v0,k1:v1")
-
-    val submitRequestServlet = new MesosSubmitRequestServlet(
-      scheduler = mock(classOf[MesosClusterScheduler]),
-      conf
-    )
-
-    val request = buildCreateSubmissionRequest()
-    val driverConf = submitRequestServlet.buildDriverDescription(request).conf
-
-    assert("test_network" == driverConf.get(NETWORK_NAME))
-    assert("k0:v0,k1:v1" == driverConf.get(NETWORK_LABELS))
-  }
-
   test("dispatcher propagates role to Drivers if 'spark.mesos.role' is not provided") {
     val dispatcherRole = "dispatcher"
     val driverRole = "driver"
