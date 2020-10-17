@@ -17,6 +17,7 @@
 
 package org.apache.spark.scheduler.cluster.mesos
 
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 import scala.collection.JavaConverters._
@@ -37,7 +38,7 @@ import org.apache.spark.network.shuffle.mesos.MesosExternalBlockStoreClient
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.rpc.{RpcAddress, RpcEndpointRef}
 import org.apache.spark.scheduler.TaskSchedulerImpl
-import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{RegisterExecutor}
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.RegisterExecutor
 import org.apache.spark.scheduler.cluster.mesos.Utils._
 
 class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
@@ -542,6 +543,21 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
 
     // Add " 0" to the taskName to match the executor number that is appended
     assert(launchedTasks.head.getName == "test-mesos-dynamic-alloc 0")
+  }
+
+  test("mesos sets different task ids across executions") {
+    setBackend()
+    var offers = List(Resources(backend.executorMemory(sc), 1))
+    offerResources(offers)
+    val firstLaunchTaskId = verifyTaskLaunched(driver, "o1").head.getTaskId.getValue
+    sc.stop()
+
+    setBackend()
+    offers = List(Resources(backend.executorMemory(sc), 1))
+    offerResources(offers)
+    val secondLaunchTaskId = verifyTaskLaunched(driver, "o1").head.getTaskId.getValue
+
+    assert(firstLaunchTaskId != secondLaunchTaskId)
   }
 
   test("mesos sets configurable labels on tasks") {
