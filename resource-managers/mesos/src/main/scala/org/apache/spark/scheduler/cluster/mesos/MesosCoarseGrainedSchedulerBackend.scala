@@ -61,9 +61,6 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
   extends CoarseGrainedSchedulerBackend(scheduler, sc.env.rpcEnv)
     with org.apache.mesos.Scheduler with MesosSchedulerUtils {
 
-  // Blacklist a slave after this many failures
-  private val MAX_SLAVE_FAILURES = 2
-
   private val maxCoresOption = conf.get(config.CORES_MAX)
 
   private val executorCoresOption = conf.getOption(config.EXECUTOR_CORES.key).map(_.toInt)
@@ -583,7 +580,11 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
       cpus + totalCoresAcquired <= maxCores &&
       mem <= offerMem &&
       numExecutors < executorLimit &&
-      slaves.get(slaveId).map(_.taskFailures).getOrElse(0) < MAX_SLAVE_FAILURES &&
+      // nodeBlacklist() currently only gets updated based on failures in spark tasks.
+      // If a mesos task fails to even start -- that is,
+      // if a spark executor fails to launch on a node -- nodeBlacklist does not get updated
+      // see SPARK-24567 for details
+      !scheduler.nodeBlacklist().contains(offerHostname) &&
       meetsPortRequirements &&
       satisfiesLocality(offerHostname)
   }
@@ -659,14 +660,10 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
           totalGpusAcquired -= gpus
           gpusByTaskId -= taskId
         }
-        // If it was a failure, mark the slave as failed for blacklisting purposes
+
         if (TaskState.isFailed(state)) {
           slave.taskFailures += 1
-
-          if (slave.taskFailures >= MAX_SLAVE_FAILURES) {
-            logInfo(s"Blacklisting Mesos slave $slaveId due to too many failures; " +
-                "is Spark installed on it?")
-          }
+          logError(s"Mesos task $taskId failed on Mesos slave $slaveId.")
         }
         executorTerminated(d, slaveId, taskId, s"Executor finished with state $state")
         // In case we'd rejected everything before but have now lost a node
