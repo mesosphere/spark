@@ -742,9 +742,37 @@ private[spark] class MesosClusterScheduler(
    * Task state like TASK_ERROR are not relaunchable state since it wasn't able
    * to be validated by Mesos.
    */
-  private def shouldRelaunch(state: MesosTaskState): Boolean = {
-    state == MesosTaskState.TASK_FAILED ||
-      state == MesosTaskState.TASK_LOST
+  private def shouldRelaunch(status: TaskStatus): Boolean = {
+    status.getState == MesosTaskState.TASK_FAILED ||
+      status.getState == MesosTaskState.TASK_LOST ||
+      isNodeDraining(status)
+  }
+
+  private def isNodeDraining(status: TaskStatus): Boolean = {
+    val state = status.getState
+    val reason = status.getReason
+
+    (MesosTaskState.TASK_KILLED == state && Reason.REASON_SLAVE_DRAINING == reason) ||
+      (MesosTaskState.TASK_GONE_BY_OPERATOR == state && Reason.REASON_SLAVE_DRAINING == reason)
+  }
+
+  private def getNewRetryState(
+      retryState: Option[MesosClusterRetryState], status: TaskStatus): MesosClusterRetryState = {
+
+    val (retries, waitTimeSec) = retryState
+      .map { rs => (rs.retries + 1, rs.waitTime) }
+      .getOrElse {
+        (1, 1)
+      }
+
+    // if a node is draining, the driver should be relaunched without backoff
+    if (isNodeDraining(status)) {
+      new MesosClusterRetryState(status, retries, new Date(), waitTimeSec)
+    } else {
+      val newWaitTime = waitTimeSec * 2
+      val nextRetry = new Date(new Date().getTime + newWaitTime * 1000L)
+      new MesosClusterRetryState(status, retries, nextRetry, newWaitTime)
+    }
   }
 
   override def statusUpdate(driver: SchedulerDriver, status: TaskStatus): Unit = {
@@ -765,20 +793,15 @@ private[spark] class MesosClusterScheduler(
         }
         val state = launchedDrivers(subId)
         // Check if the driver is supervise enabled and can be relaunched.
-        if (state.driverDescription.supervise && shouldRelaunch(status.getState)) {
+        if (state.driverDescription.supervise && shouldRelaunch(status)) {
           if (isTaskOutdated(taskId, state)) {
             // Prevent outdated task from overwriting a more recent status
             return
           }
           removeFromLaunchedDrivers(subId)
           state.finishDate = Some(new Date())
-          val retryState: Option[MesosClusterRetryState] = state.driverDescription.retryState
-          val (retries, waitTimeSec) = retryState
-            .map { rs => (rs.retries + 1, Math.min(maxRetryWaitTime, rs.waitTime * 2)) }
-            .getOrElse{ (1, 1) }
-          val nextRetry = new Date(new Date().getTime + waitTimeSec * 1000L)
-          val newDriverDescription = state.driverDescription.copy(
-            retryState = Some(new MesosClusterRetryState(status, retries, nextRetry, waitTimeSec)))
+          val newRetryState = getNewRetryState(state.driverDescription.retryState, status)
+          val newDriverDescription = state.driverDescription.copy(retryState = Some(newRetryState))
           addDriverToPending(newDriverDescription, newDriverDescription.submissionId)
         } else if (TaskState.isFinished(mesosToTaskState(status.getState))) {
           retireDriver(subId, state)
