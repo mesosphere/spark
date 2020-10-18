@@ -821,6 +821,15 @@ See the [configuration page](configuration.html) for information on Spark config
   <td>2.0.0</td>
 </tr>
 <tr>
+  <td><code>spark.mesos.scheduler.revive.interval</code></td>
+  <td><code>10s</code></td>
+  <td>
+    Amount of milliseconds between periodic revive calls to Mesos, when the job
+    driver is not suppressing resource offers.
+  </td>
+  <td>3.0.1</td>
+</tr>
+<tr>
   <td><code>spark.mesos.appJar.local.resolution.mode</code></td>
   <td><code>host</code></td>
   <td>

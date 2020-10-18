@@ -253,6 +253,14 @@ package object config {
       .timeConf(TimeUnit.SECONDS)
       .createOptional
 
+  private[spark] val REVIVE_OFFERS_INTERVAL =
+    ConfigBuilder("spark.mesos.scheduler.revive.interval")
+      .doc("Amount of milliseconds between periodic revive calls to Mesos, when the job " +
+        "driver is not suppressing resource offers.")
+      .version("3.0.1")
+      .timeConf(TimeUnit.MILLISECONDS)
+      .createWithDefaultString("10s")
+
   private[spark] val URIS_TO_DOWNLOAD =
     ConfigBuilder("spark.mesos.uris")
       .doc("A comma-separated list of URIs to be downloaded to the sandbox when driver or " +

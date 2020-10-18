@@ -24,6 +24,8 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
+import org.apache.commons.lang3.time.DateUtils
+
 import org.apache.mesos.{Scheduler, SchedulerDriver}
 import org.apache.mesos.Protos.{TaskState => MesosTaskState, _}
 import org.apache.mesos.Protos.Environment.Variable
@@ -745,6 +747,24 @@ private[spark] class MesosClusterScheduler(
   private def shouldRelaunch(state: MesosTaskState): Boolean = {
     state == MesosTaskState.TASK_FAILED ||
       state == MesosTaskState.TASK_LOST
+  }
+
+  private def getNewRetryState(
+      retryState: Option[MesosClusterRetryState], status: TaskStatus): MesosClusterRetryState = {
+    val now = new Date()
+    retryState.map { rs =>
+      val newRetries = rs.retries + 1
+      // if a node is draining, the driver should be relaunched without backoff
+      if (isNodeDraining(status)) {
+        new MesosClusterRetryState(status, newRetries, now, rs.waitTime)
+      } else {
+        new MesosClusterRetryState(
+          status, newRetries, DateUtils.addSeconds(now, rs.waitTime), rs.waitTime * 2)
+      }
+    }.getOrElse {
+      // this is the first retry which should happen without backoff
+      new MesosClusterRetryState(status, 1, now, 1)
+    }
   }
 
   override def statusUpdate(driver: SchedulerDriver, status: TaskStatus): Unit = {
