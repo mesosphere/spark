@@ -275,4 +275,10 @@ private[spark] object MetricsSystemInstances {
 
   // The Spark cluster scheduler when running on Mesos
   val MESOS_CLUSTER = "mesos_cluster"
+
+  // The Spark scheduler when running on Mesos
+  val MESOS = "mesos"
+
+  // The Spark dispatcher process
+  val DISPATCHER = "dispatcher"
 }

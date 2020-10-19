@@ -329,6 +329,15 @@ private[spark] class SecurityManager(
         // with the way k8s handles propagation of delegation tokens.
         false
 
+      case mesosRegex() =>
+        require(sparkConf.contains(AUTH_SECRET_FILE.key) ||
+          sparkConf.contains(AUTH_SECRET_FILE_DRIVER.key) ||
+          sparkConf.contains(AUTH_SECRET_FILE_EXECUTOR.key) ||
+          sparkConf.contains(SPARK_AUTH_SECRET_CONF),
+          "A secret key must be specified via the " +
+            AUTH_SECRET_FILE.key + " or " + SPARK_AUTH_SECRET_CONF + " config.")
+        return
+
       case _ =>
         require(sparkConf.contains(SPARK_AUTH_SECRET_CONF),
           s"A secret key must be specified via the $SPARK_AUTH_SECRET_CONF config.")

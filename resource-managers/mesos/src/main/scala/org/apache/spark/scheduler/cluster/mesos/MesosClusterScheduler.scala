@@ -125,9 +125,9 @@ private[spark] class MesosClusterScheduler(
     conf: SparkConf)
   extends Scheduler with MesosSchedulerUtils {
   var frameworkUrl: String = _
-  private val mesosClusterSchedulerMetricsSource = new MesosClusterSchedulerSource(this)
+  private val metricsSource = new MesosClusterSchedulerSource(this)
   private val metricsSystem =
-    MetricsSystem.createMetricsSystem("dispatcher", conf, new SecurityManager(conf))
+    MetricsSystem.createMetricsSystem(MetricsSystemInstances.DISPATCHER, conf, new SecurityManager(conf))
   private val master = conf.get("spark.master")
   private val appName = conf.get("spark.app.name")
   private val queuedCapacity = conf.get(config.MAX_DRIVERS)
@@ -308,7 +308,7 @@ private[spark] class MesosClusterScheduler(
       frameworkId = id
     }
     recoverState()
-    metricsSystem.registerSource(mesosClusterSchedulerMetricsSource)
+    metricsSystem.registerSource(metricsSource)
     metricsSystem.start()
     val driver = createSchedulerDriver(
       masterUrl = master,
@@ -399,7 +399,7 @@ private[spark] class MesosClusterScheduler(
     // Hack so Spark jobs can authenticate with Mesos using dcos-oauth
     val kDcosServiceAccountCredential = "DCOS_SERVICE_ACCOUNT_CREDENTIAL"
     val credentialMap = if (sys.env.contains(kDcosServiceAccountCredential)) {
-      Map(kDcosServiceAccountCredential -> sys.env("DCOS_SERVICE_ACCOUNT_CREDENTIAL"))
+      Map(kDcosServiceAccountCredential -> sys.env(kDcosServiceAccountCredential))
     } else {
       Map()
     }
@@ -526,7 +526,7 @@ private[spark] class MesosClusterScheduler(
 
   private def getUser(desc: MesosDriverDescription): String = {
     desc.conf
-      .getOption("spark.mesos.driverEnv.SPARK_USER")
+      .getOption(config.DRIVER_ENV_PREFIX + "SPARK_USER")
       .getOrElse(Utils.getCurrentUserName())
   }
 
@@ -568,10 +568,10 @@ private[spark] class MesosClusterScheduler(
       .filter { case (key, _) => !replicatedOptionsBlacklist.contains(key) }
       .toMap
       .foreach { case (key, value) =>
-        options ++= Seq("--conf", shellEscape(s"$key=${value}"))
+        options ++= Seq("--conf", s"${key}=${value}")
       }
 
-    options
+    options.map(shellEscape)
   }
 
   /**
@@ -666,14 +666,14 @@ private[spark] class MesosClusterScheduler(
             new Date(),
             None,
             getDriverFrameworkID(submission))
-          mesosClusterSchedulerMetricsSource.recordLaunchedDriver(submission)
+          metricsSource.recordLaunchedDriver(submission)
           launchedDrivers(submission.submissionId) = newState
           launchedDriversState.persist(submission.submissionId, newState)
           afterLaunchCallback(submission.submissionId)
         } catch {
           case e: SparkException =>
             afterLaunchCallback(submission.submissionId)
-            mesosClusterSchedulerMetricsSource.recordExceptionDriver(submission)
+            metricsSource.recordExceptionDriver(submission)
             finishedDrivers += new MesosClusterSubmissionState(
               submission,
               TaskID.newBuilder().setValue(submission.submissionId).build(),
@@ -827,10 +827,10 @@ private[spark] class MesosClusterScheduler(
           state.finishDate = Some(new Date())
           val newRetryState = getNewRetryState(state.driverDescription.retryState, status)
           val newDriverDescription = state.driverDescription.copy(retryState = Some(newRetryState))
-          mesosClusterSchedulerMetricsSource.recordRetryingDriver(state)
+          metricsSource.recordRetryingDriver(state)
           addDriverToPending(newDriverDescription, newDriverDescription.submissionId)
         } else if (TaskState.isFinished(mesosToTaskState(status.getState))) {
-          mesosClusterSchedulerMetricsSource.recordFinishedDriver(state, status.getState)
+          metricsSource.recordFinishedDriver(state, status.getState)
           retireDriver(subId, state)
         }
         state.mesosTaskStatus = Option(status)
@@ -911,7 +911,7 @@ private[spark] class MesosClusterScheduler(
 
   private def addDriverToQueue(desc: MesosDriverDescription): Unit = {
     queuedDriversState.persist(desc.submissionId, desc)
-    mesosClusterSchedulerMetricsSource.recordQueuedDriver()
+    metricsSource.recordQueuedDriver()
     queuedDrivers += desc
     revive()
   }

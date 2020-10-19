@@ -23,18 +23,19 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.collection.mutable.HashMap
 
-import com.codahale.metrics.{Counter, Gauge, MetricRegistry, Timer}
+import com.codahale.metrics.{Gauge, MetricRegistry, Timer}
 import org.apache.mesos.Protos.{TaskState => MesosTaskState}
 
 import org.apache.spark.TaskState
 import org.apache.spark.deploy.mesos.MesosDriverDescription
 import org.apache.spark.metrics.source.Source
+import org.apache.spark.metrics.MetricsSystemInstances
 
 private[mesos] class MesosCoarseGrainedSchedulerSource(
   scheduler: MesosCoarseGrainedSchedulerBackend)
     extends Source with MesosSchedulerUtils {
 
-  override val sourceName: String = "mesos"
+  override val sourceName: String = MetricsSystemInstances.MESOS
   override val metricRegistry: MetricRegistry = new MetricRegistry
 
   // EXECUTOR STATE POLLING METRICS:

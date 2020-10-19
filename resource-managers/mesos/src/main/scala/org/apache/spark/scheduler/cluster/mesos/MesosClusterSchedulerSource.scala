@@ -28,6 +28,7 @@ import org.apache.mesos.Protos.{TaskState => MesosTaskState}
 import org.apache.spark.TaskState
 import org.apache.spark.deploy.mesos.MesosDriverDescription
 import org.apache.spark.metrics.source.Source
+import org.apache.spark.metrics.MetricsSystemInstances
 
 private[mesos] class MesosClusterSchedulerSource(scheduler: MesosClusterScheduler)
   extends Source with MesosSchedulerUtils {
@@ -47,7 +48,7 @@ private[mesos] class MesosClusterSchedulerSource(scheduler: MesosClusterSchedule
   // - pruning/retireDriver():
   //     From: finishedDrivers:
   //     To:   NULL
-  override val sourceName: String = "mesos"
+  override val sourceName: String = MetricsSystemInstances.MESOS
   override val metricRegistry: MetricRegistry = new MetricRegistry
 
   // PULL METRICS:

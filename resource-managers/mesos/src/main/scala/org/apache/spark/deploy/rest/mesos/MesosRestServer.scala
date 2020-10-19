@@ -25,8 +25,9 @@ import javax.servlet.http.HttpServletResponse
 
 import org.apache.spark.{SPARK_VERSION => sparkVersion, SparkConf, SparkException}
 import org.apache.spark.deploy.Command
+import org.apache.spark.deploy.mesos.config._
 import org.apache.spark.deploy.mesos.MesosDriverDescription
-import org.apache.spark.deploy.rest._
+import org.apache.spark.deploy.rest.{SubmitRestProtocolException, _}
 import org.apache.spark.internal.config
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.scheduler.cluster.mesos.{MesosClusterScheduler, MesosProtoUtils}
@@ -112,8 +113,7 @@ private[mesos] class MesosSubmitRequestServlet(
 
     validateLabelsFormat(sparkProperties)
 
-    // Construct driver description
-    val defaultConf = this.conf.getAllWithPrefix("spark.mesos.dispatcher.driverDefault.").toMap
+    val defaultConf = this.conf.getAllWithPrefix(DISPATCHER_DRIVER_DEFAULT_PREFIX).toMap
     val driverConf = new SparkConf(false)
       .setAll(defaultConf)
       .setAll(sparkProperties)
@@ -121,9 +121,10 @@ private[mesos] class MesosSubmitRequestServlet(
     // role propagation and enforcement
     validateRole(sparkProperties)
     getDriverRoleOrDefault(sparkProperties).foreach { role =>
-      driverConf.set("spark.mesos.role", role)
+      driverConf.set(ROLE.key, role)
     }
 
+    // Construct driver description
     val extraClassPath = driverExtraClassPath.toSeq.flatMap(_.split(File.pathSeparator))
     val extraLibraryPath = driverExtraLibraryPath.toSeq.flatMap(_.split(File.pathSeparator))
     val defaultJavaOpts = driverDefaultJavaOptions.map(Utils.splitCommandString)
@@ -156,6 +157,7 @@ private[mesos] class MesosSubmitRequestServlet(
           val driverDescription = buildDriverDescription(submitRequest)
           val s = scheduler.submitDriver(driverDescription)
           s.serverSparkVersion = sparkVersion
+
           val unknownFields = findUnknownFields(requestMessageJson, requestMessage)
           if (unknownFields.nonEmpty) {
             // If there are fields that the server does not know about, warn the client
@@ -180,12 +182,11 @@ private[mesos] class MesosSubmitRequestServlet(
    * users can submit jobs with any role.
    */
   private[mesos] def validateRole(properties: Map[String, String]): Unit = {
-    properties.get("spark.mesos.role").filter(_.nonEmpty).foreach { driverRole =>
-      conf.getOption("spark.mesos.role").filter(_.nonEmpty)
+    properties.get(ROLE.key).filter(_.nonEmpty).foreach { driverRole =>
+      conf.getOption(ROLE.key).filter(_.nonEmpty)
         .foreach { dispatcherRole =>
 
-        val roleEnforcementEnabled =
-          conf.getBoolean("spark.mesos.dispatcher.role.enforce", defaultValue = false)
+        val roleEnforcementEnabled = conf.get(ENFORCE_DISPATCHER_ROLE)
 
         if (dispatcherRole != driverRole && roleEnforcementEnabled) {
             throw new SubmitRestProtocolException(
@@ -199,15 +200,15 @@ private[mesos] class MesosSubmitRequestServlet(
   }
 
   private[mesos] def getDriverRoleOrDefault(properties: Map[String, String]): Option[String] = {
-    if (properties.get("spark.mesos.role").isDefined) {
-       properties.get("spark.mesos.role")
+    if (properties.get(ROLE.key).isDefined) {
+       properties.get(ROLE.key)
     } else {
-      conf.getOption("spark.mesos.role")
+      conf.getOption(ROLE.key)
     }
   }
 
   private[mesos] def validateLabelsFormat(properties: Map[String, String]): Unit = {
-    List("spark.mesos.network.labels", "spark.mesos.task.labels", "spark.mesos.driver.labels")
+    List(NETWORK_LABELS.key, TASK_LABELS.key, DRIVER_LABELS.key)
       .foreach { name =>
       properties.get(name) foreach { label =>
         try {

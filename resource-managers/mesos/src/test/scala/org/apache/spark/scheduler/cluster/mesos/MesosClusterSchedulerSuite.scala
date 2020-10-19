@@ -590,7 +590,7 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
 
     val response = scheduler.submitDriver(
       new MesosDriverDescription("d1", "jar", 100, 1, true, command,
-        Map(("spark.mesos.executor.home", "test"), ("spark.app.name", "test")), "sub1", new Date()))
+        Map((config.EXECUTOR_HOME.key, "test"), ("spark.app.name", "test")), "sub1", new Date()))
     assert(response.success)
 
     // Offer a resource to launch the submitted driver and send TASK_RUNNING

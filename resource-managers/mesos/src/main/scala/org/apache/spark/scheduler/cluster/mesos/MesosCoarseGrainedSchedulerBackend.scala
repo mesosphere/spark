@@ -80,6 +80,8 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
 
   private val maxGpus = conf.get(MAX_GPUS)
 
+  private val executorGpusOption = conf.getOption(EXECUTOR_GPUS.key).map(_.toInt)
+
   private val taskLabels = conf.get(TASK_LABELS)
 
   private[this] val shutdownTimeoutMS = conf.get(COARSE_SHUTDOWN_TIMEOUT)
@@ -629,6 +631,12 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
       satisfiesLocality(offerHostname)
   }
 
+  private def executorGpus(offerGPUs: Int): Int = {
+    executorGpusOption.getOrElse(
+      math.min(offerGPUs, maxGpus - totalGpusAcquired)
+    )
+  }
+
   private def executorCores(offerCPUs: Int): Int = {
     executorCoresOption.getOrElse(
       math.min(offerCPUs, maxCores - totalCoresAcquired)
@@ -864,7 +872,6 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
   }
 
   // Calls used for metrics polling, see MesosCoarseGrainedSchedulerSource:
-
   def getCoresUsed(): Double = totalCoresAcquired
   def getMaxCores(): Double = maxCores
   def getMeanCoresPerTask(): Double = {

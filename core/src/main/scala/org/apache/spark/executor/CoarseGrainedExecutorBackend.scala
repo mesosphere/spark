@@ -17,10 +17,8 @@
 
 package org.apache.spark.executor
 
-import java.io.File
 import java.net.URL
 import java.nio.ByteBuffer
-import java.nio.file.{Files, Paths}
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -28,7 +26,6 @@ import scala.collection.mutable
 import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
 
-import com.google.common.hash.HashCodes
 import org.json4s.DefaultFormats
 
 import org.apache.spark._
@@ -289,22 +286,13 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       // Bootstrap to fetch the driver's Spark properties.
       val executorConf = new SparkConf
 
-      if (System.getenv(SecurityManager.ENV_AUTH_SECRET) != null) {
-        executorConf.set("spark.authenticate", "true")
-        val secret = System.getenv(SecurityManager.ENV_AUTH_SECRET)
-        if (Files.exists(Paths.get(secret))) {
-          val s = HashCodes.fromBytes(Files.readAllBytes(Paths.get(secret))).toString
-          executorConf.set(SecurityManager.SPARK_AUTH_SECRET_CONF, s)
-        }
-      }
-
       val fetcher = RpcEnv.create(
         "driverPropsFetcher",
         arguments.bindAddress,
         arguments.hostname,
         -1,
         executorConf,
-        new SecurityManager(executorConf),
+        new SecurityManager(executorConf, None, AUTH_SECRET_FILE_EXECUTOR),
         numUsableCores = 0,
         clientMode = true)
 

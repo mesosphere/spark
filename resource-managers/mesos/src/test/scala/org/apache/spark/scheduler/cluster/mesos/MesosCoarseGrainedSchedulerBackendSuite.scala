@@ -207,23 +207,27 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
 
 
   test("mesos acquires spark.mesos.executor.gpus number of gpus per executor") {
-    setBackend(Map("spark.mesos.gpus.max" -> "5",
-                   "spark.mesos.executor.gpus" -> "2"))
+    val maxGpus = 5
+    val executorGpus = 2
+    setBackend(Map(mesosConfig.MAX_GPUS.key -> maxGpus.toString,
+      mesosConfig.EXECUTOR_GPUS.key -> executorGpus.toString))
 
     val executorMemory = backend.executorMemory(sc)
-    offerResources(List(Resources(executorMemory, 1, 5)))
+    offerResources(List(Resources(executorMemory, 1, maxGpus)))
 
     val taskInfos = verifyTaskLaunched(driver, "o1")
     assert(taskInfos.length == 1)
 
     val gpus = backend.getResource(taskInfos.head.getResourcesList, "gpus")
-    assert(gpus == 2)
+    assert(gpus == executorGpus)
   }
 
 
   test("mesos declines offers that cannot satisfy spark.mesos.executor.gpus") {
-    setBackend(Map("spark.mesos.gpus.max" -> "5",
-                   "spark.mesos.executor.gpus" -> "2"))
+    val maxGpus = 5
+    val executorGpus = 2
+    setBackend(Map(mesosConfig.MAX_GPUS.key -> maxGpus.toString,
+      mesosConfig.EXECUTOR_GPUS.key -> executorGpus.toString))
 
     val executorMemory = backend.executorMemory(sc)
     offerResources(List(Resources(executorMemory, 1, 1)))
@@ -232,8 +236,10 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
 
 
   test("mesos declines offers where spark.mesos.gpus.max less than spark.mesos.executor.gpus") {
-    setBackend(Map("spark.mesos.gpus.max" -> "2",
-                   "spark.mesos.executor.gpus" -> "5"))
+    val maxGpus = 2
+    val executorGpus = 5
+    setBackend(Map(mesosConfig.MAX_GPUS.key -> maxGpus.toString,
+      mesosConfig.EXECUTOR_GPUS.key -> executorGpus.toString))
 
     val executorMemory = backend.executorMemory(sc)
     offerResources(List(Resources(executorMemory, 1, 5)))
@@ -242,19 +248,21 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
 
 
   test("mesos declines offers that exceed spark.mesos.gpus.max") {
-    setBackend(Map("spark.mesos.gpus.max" -> "5",
-                   "spark.mesos.executor.gpus" -> "2"))
+    val maxGpus = 5
+    val executorGpus = 2
+    setBackend(Map(mesosConfig.MAX_GPUS.key -> maxGpus.toString,
+      mesosConfig.EXECUTOR_GPUS.key -> executorGpus.toString))
 
     val executorMemory = backend.executorMemory(sc)
     offerResources(List(Resources(executorMemory, 1, 2),
-                        Resources(executorMemory, 1, 2),
-                        Resources(executorMemory, 1, 2)))
+      Resources(executorMemory, 1, 2),
+      Resources(executorMemory, 1, 2)))
 
     val taskInfos1 = verifyTaskLaunched(driver, "o1")
-    assert(backend.getResource(taskInfos1.head.getResourcesList, "gpus") == 2)
+    assert(backend.getResource(taskInfos1.head.getResourcesList, "gpus") == executorGpus)
 
     val taskInfos2 = verifyTaskLaunched(driver, "o2")
-    assert(backend.getResource(taskInfos2.head.getResourcesList, "gpus") == 2)
+    assert(backend.getResource(taskInfos2.head.getResourcesList, "gpus") == executorGpus)
 
     verifyDeclinedOffer(driver, createOfferId("o3"))
   }
@@ -346,7 +354,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     val executors = 2
     setBackend(Map(
       "spark.executor.cores" -> executorCores.toString(),
-      "spark.cores.max" -> (executorCores * executors).toString()))
+      CORES_MAX.key -> (executorCores * executors).toString()))
 
     val executorMemory = backend.executorMemory(sc)
     offerResources(List(
@@ -372,7 +380,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     val executors = 10
     setBackend(Map(
       "spark.executor.cores" -> executorCores.toString(),
-      "spark.cores.max" -> (executorCores * executors).toString()))
+      CORES_MAX.key -> (executorCores * executors).toString()))
 
     val executorMemory = backend.executorMemory(sc)
     offerResources(List(
@@ -405,9 +413,9 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     val executorCores = 1
     val executors = 3
     setBackend(Map(
-      "spark.mesos.scheduler.revive.interval" -> "1s",
+      mesosConfig.REVIVE_OFFERS_INTERVAL.key -> "1s",
       "spark.executor.cores" -> executorCores.toString(),
-      "spark.cores.max" -> (executorCores * executors).toString()))
+      CORES_MAX.key -> (executorCores * executors).toString()))
 
     val executorMemory = backend.executorMemory(sc)
     offerResources(List(
