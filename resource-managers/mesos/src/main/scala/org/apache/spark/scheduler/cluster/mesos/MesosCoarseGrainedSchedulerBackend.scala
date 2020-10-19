@@ -212,7 +212,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
       appName = sc.appName,
       conf = sc.conf,
       webuiUrl = sc.conf.get(DRIVER_WEBUI_URL).orElse(sc.ui.map(_.webUrl)),
-      checkpoint = sc.conf.getOption(CHECKPOINT.key),
+      checkpoint = Some(sc.conf.get(CHECKPOINT)),
       failoverTimeout = Some(sc.conf.get(DRIVER_FAILOVER_TIMEOUT)),
       frameworkId = sc.conf.get(DRIVER_FRAMEWORK_ID).map(_ + suffix)
     )
