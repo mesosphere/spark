@@ -76,8 +76,6 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
 
   private val useFetcherCache = conf.get(ENABLE_FETCHER_CACHE)
 
-  private val executorGpusOption = conf.getOption("spark.mesos.executor.gpus").map(_.toInt)
-
   private val maxGpus = conf.get(MAX_GPUS)
 
   private val executorGpusOption = conf.getOption(EXECUTOR_GPUS.key).map(_.toInt)
@@ -214,7 +212,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
       appName = sc.appName,
       conf = sc.conf,
       webuiUrl = sc.conf.get(DRIVER_WEBUI_URL).orElse(sc.ui.map(_.webUrl)),
-      checkpoint = sc.conf.get(CHECKPOINT),
+      checkpoint = sc.conf.getOption(CHECKPOINT.key),
       failoverTimeout = Some(sc.conf.get(DRIVER_FAILOVER_TIMEOUT)),
       frameworkId = sc.conf.get(DRIVER_FRAMEWORK_ID).map(_ + suffix)
     )
@@ -660,12 +658,6 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
       return false
     }
     return true
-  }
-
-  private def executorGpus(offerGPUs: Int): Int = {
-    executorGpusOption.getOrElse(
-      math.min(offerGPUs, maxGpus - totalGpusAcquired)
-    )
   }
 
   override def statusUpdate(d: org.apache.mesos.SchedulerDriver, status: TaskStatus): Unit = {
