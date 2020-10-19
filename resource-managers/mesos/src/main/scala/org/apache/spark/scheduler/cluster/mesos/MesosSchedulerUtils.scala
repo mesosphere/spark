@@ -552,7 +552,7 @@ trait MesosSchedulerUtils extends Logging {
    * the same frameworkID.  To enforce that only the first driver registers with the configured
    * framework ID, the driver calls this method after the first registration.
    */
-  @deprecated("Multiple Spark Contexts and fine-grained scheduler are deprecated")
+  @deprecated("Multiple Spark Contexts and fine-grained scheduler are deprecated", "3.0.1")
   def unsetFrameworkID(sc: SparkContext): Unit = {
     sc.conf.remove(mesosConfig.DRIVER_FRAMEWORK_ID)
     System.clearProperty(mesosConfig.DRIVER_FRAMEWORK_ID.key)
