@@ -30,6 +30,7 @@ import org.mockito.Mockito._
 import org.scalatestplus.mockito.MockitoSugar
 
 import org.apache.spark.{LocalSparkContext, SparkConf, SparkFunSuite}
+import org.apache.spark.internal.config._
 import org.apache.spark.deploy.Command
 import org.apache.spark.deploy.mesos.MesosDriverDescription
 import org.apache.spark.deploy.mesos.config
@@ -211,7 +212,7 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
 
     val driverDesc = testDriverDescription("s1", Map[String, String](
       "spark.app.name" -> "AnApp With $pecialChars.py",
-      "spark.mesos.executor.home" -> "test"
+      config.EXECUTOR_HOME.key -> "test"
     ))
 
     val cmdString = scheduler.getDriverCommandValue(driverDesc)
@@ -223,7 +224,7 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
 
     val driverDesc = testDriverDescription("s1", Map[String, String](
       "spark.app.name" -> "app.py",
-      "spark.mesos.executor.home" -> "test",
+      config.EXECUTOR_HOME.key -> "test",
       "spark.driver.extraJavaOptions" -> "-DparamA=\"val1 val2\" -Dpath=$PATH"
     ))
 
@@ -237,8 +238,8 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
 
     val driverDesc = testDriverDescription("s1", Map[String, String](
       "spark.app.name" -> "app.py",
-      "spark.mesos.executor.docker.image" -> "test/spark:01",
-      "spark.submit.pyFiles" -> "http://site.com/extraPythonFile.py"
+      config.EXECUTOR_DOCKER_IMAGE.key -> "test/spark:01",
+      SUBMIT_PYTHON_FILES.key -> "http://site.com/extraPythonFile.py"
     ))
 
     val cmdString = scheduler.getDriverCommandValue(driverDesc)
