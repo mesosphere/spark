@@ -17,7 +17,6 @@
 
 package org.apache.spark.executor
 
-import java.io.File
 import java.net.URL
 import java.nio.ByteBuffer
 import java.util.Locale
@@ -286,6 +285,12 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
 
       // Bootstrap to fetch the driver's Spark properties.
       val executorConf = new SparkConf
+
+      if (System.getenv(SecurityManager.ENV_AUTH_SECRET) != null ||
+        System.getenv(SecurityManager.ENV_AUTH_SECRET_FILE) != null) {
+        executorConf.set(NETWORK_AUTH_ENABLED.key, "true")
+      }
+
       val fetcher = RpcEnv.create(
         "driverPropsFetcher",
         arguments.bindAddress,
