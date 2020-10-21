@@ -51,8 +51,8 @@ class MesosSubmitRequestServletSuite extends SparkFunSuite
     val request = buildCreateSubmissionRequest()
     val driverConf = submitRequestServlet.buildDriverDescription(request).conf
 
-    assert("test_network" == driverConf.get(NETWORK_NAME))
-    assert("k0:v0,k1:v1" == driverConf.get(NETWORK_LABELS))
+    assert(Some("test_network") == driverConf.get(NETWORK_NAME))
+    assert(Some("k0:v0,k1:v1") == driverConf.get(NETWORK_LABELS))
   }
 
   test("test a job with malformed labels is not submitted") {
@@ -87,12 +87,12 @@ class MesosSubmitRequestServletSuite extends SparkFunSuite
     var request = buildCreateSubmissionRequest()
     request.sparkProperties = Map(ROLE.key -> driverRole)
     var driverConf = submitRequestServlet.buildDriverDescription(request).conf
-    assert(driverConf.get(ROLE) === driverRole)
+    assert(driverConf.get(ROLE) === Some(driverRole))
 
     // dispatcher role is used when driver role is not provided
     request = buildCreateSubmissionRequest()
     driverConf = submitRequestServlet.buildDriverDescription(request).conf
-    assert(driverConf.get(ROLE) === dispatcherRole)
+    assert(driverConf.get(ROLE) === Some(dispatcherRole))
   }
 
   test("dispatcher enforces role when 'spark.mesos.dispatcher.role.enforce' enabled") {
@@ -111,13 +111,13 @@ class MesosSubmitRequestServletSuite extends SparkFunSuite
     // dispatcher role is used by default
     var request = buildCreateSubmissionRequest()
     var driverConf = submitRequestServlet.buildDriverDescription(request).conf
-    assert(driverConf.get(ROLE) === dispatcherRole)
+    assert(driverConf.get(ROLE) === Some(dispatcherRole))
 
     // if both driver and dispatcher use the same role the request should be accepted
     request = buildCreateSubmissionRequest()
     request.sparkProperties = Map(ROLE.key -> dispatcherRole)
     driverConf = submitRequestServlet.buildDriverDescription(request).conf
-    assert(driverConf.get(ROLE) === dispatcherRole)
+    assert(driverConf.get(ROLE) === Some(dispatcherRole))
 
     // if driver specifies a different role and enforcement is enabled the request should fail
     request = buildCreateSubmissionRequest()
