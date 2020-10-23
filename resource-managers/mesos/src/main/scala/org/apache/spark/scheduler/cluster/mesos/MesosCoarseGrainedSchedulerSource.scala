@@ -18,6 +18,7 @@
 package org.apache.spark.scheduler.cluster.mesos
 
 import java.util.Date
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -28,8 +29,8 @@ import org.apache.mesos.Protos.{TaskState => MesosTaskState}
 
 import org.apache.spark.TaskState
 import org.apache.spark.deploy.mesos.MesosDriverDescription
-import org.apache.spark.metrics.source.Source
 import org.apache.spark.metrics.MetricsSystemInstances
+import org.apache.spark.metrics.source.Source
 
 private[mesos] class MesosCoarseGrainedSchedulerSource(
   scheduler: MesosCoarseGrainedSchedulerBackend)
@@ -140,7 +141,7 @@ private[mesos] class MesosCoarseGrainedSchedulerSource(
   // Counters for Spark states on launched executors (LAUNCHING, RUNNING, ...)
   private val sparkStateCounters = TaskState.values
     .map(state => (state, metricRegistry.counter(
-      MetricRegistry.name("spark_state", state.toString.toLowerCase))))
+      MetricRegistry.name("spark_state", state.toString.toLowerCase(Locale.ROOT)))))
     .toMap
   private val sparkUnknownStateCounter =
     metricRegistry.counter(MetricRegistry.name("spark_state", "UNKNOWN"))
@@ -148,7 +149,7 @@ private[mesos] class MesosCoarseGrainedSchedulerSource(
   // more granular than sparkStateCounters
   private val mesosStateCounters = MesosTaskState.values
     .map(state => (state, metricRegistry.counter(
-      MetricRegistry.name("mesos_state", state.name.toLowerCase))))
+      MetricRegistry.name("mesos_state", state.name.toLowerCase(Locale.ROOT)))))
     .toMap
   private val mesosUnknownStateCounter =
     metricRegistry.counter(MetricRegistry.name("mesos_state", "UNKNOWN"))
@@ -170,7 +171,7 @@ private[mesos] class MesosCoarseGrainedSchedulerSource(
   // Duration between an executor launch and the executor entering a given spark state, e.g. RUNNING
   private val launchToSparkStateTimers = TaskState.values
     .map(state => (state, metricRegistry.timer(
-      MetricRegistry.name("launch_to_spark_state", state.toString.toLowerCase))))
+      MetricRegistry.name("launch_to_spark_state", state.toString.toLowerCase(Locale.ROOT)))))
     .toMap
   private val launchToUnknownSparkStateTimer = metricRegistry.timer(
     MetricRegistry.name("launch_to_spark_state", "UNKNOWN"))

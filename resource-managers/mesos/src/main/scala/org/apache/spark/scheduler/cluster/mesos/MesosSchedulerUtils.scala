@@ -288,6 +288,7 @@ trait MesosSchedulerUtils extends Logging {
    */
   protected def toAttributeMap(offerAttributes: JList[Attribute])
     : Map[String, GeneratedMessageV3] = {
+    import language.existentials
     offerAttributes.asScala.map { attr =>
       val attrValue = attr.getType match {
         case Value.Type.SCALAR => attr.getScalar

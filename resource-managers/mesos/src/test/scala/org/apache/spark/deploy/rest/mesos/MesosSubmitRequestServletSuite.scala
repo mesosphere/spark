@@ -18,9 +18,10 @@
 package org.apache.spark.deploy.rest.mesos
 
 import org.mockito.Mockito.mock
+
 import org.apache.spark.{SparkConf, SparkFunSuite}
-import org.apache.spark.deploy.mesos.config._
 import org.apache.spark.deploy.TestPrematureExit
+import org.apache.spark.deploy.mesos.config._
 import org.apache.spark.deploy.rest.{CreateSubmissionRequest, SubmitRestProtocolException}
 import org.apache.spark.scheduler.cluster.mesos.MesosClusterScheduler
 

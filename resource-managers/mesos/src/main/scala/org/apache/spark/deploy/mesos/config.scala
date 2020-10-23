@@ -136,10 +136,12 @@ package object config {
 
   private[spark] val CHECKPOINT =
     ConfigBuilder("spark.mesos.checkpoint")
-      .doc("If set to true, the mesos agents that are running the Spark executors will write the framework pid, executor pids and status updates to disk. " +
-        "If the agent exits (e.g., due to a crash or as part of upgrading Mesos), this checkpointed data allows the restarted agent to " +
-        "reconnect to executors that were started by the old instance of the agent. Enabling checkpointing improves fault tolerance, " +
-        "at the cost of a (usually small) increase in disk I/O.")
+      .doc("If set to true, the mesos agents that are running the Spark executors will write the " +
+        "the framework pid, executor pids and status updates to disk. If the agent exits " +
+        "(e.g., due to a crash or as part of upgrading Mesos), this checkpointed data allows " +
+        "the restarted agent to reconnect to executors that were started by the old instance " +
+        "of the agent. Enabling checkpointing improves fault tolerance, at the cost of a " +
+        "(usually small) increase in disk I/O.")
       .version("3.0.1")
       .booleanConf
       .createWithDefault(false)

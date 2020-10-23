@@ -126,8 +126,8 @@ private[spark] class MesosClusterScheduler(
   extends Scheduler with MesosSchedulerUtils {
   var frameworkUrl: String = _
   private val metricsSource = new MesosClusterSchedulerSource(this)
-  private val metricsSystem =
-    MetricsSystem.createMetricsSystem(MetricsSystemInstances.DISPATCHER, conf, new SecurityManager(conf))
+  private val metricsSystem = MetricsSystem.createMetricsSystem(
+    MetricsSystemInstances.DISPATCHER, conf, new SecurityManager(conf))
   private val master = conf.get("spark.master")
   private val appName = conf.get("spark.app.name")
   private val queuedCapacity = conf.get(config.MAX_DRIVERS)

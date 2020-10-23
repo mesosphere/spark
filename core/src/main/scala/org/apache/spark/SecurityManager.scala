@@ -48,7 +48,8 @@ private[spark] class SecurityManager(
     sparkConf: SparkConf,
     val ioEncryptionKey: Option[Array[Byte]] = None,
     authSecretFileConf: ConfigEntry[Option[String]] = AUTH_SECRET_FILE)
-  extends Logging with SecretKeyHolder {
+    extends Logging
+    with SecretKeyHolder {
 
   import SecurityManager._
 
@@ -75,8 +76,8 @@ private[spark] class SecurityManager(
   private var modifyAclsGroups: Set[String] = _
 
   // always add the current user and SPARK_USER to the viewAcls
-  private val defaultAclUsers = Set[String](System.getProperty("user.name", ""),
-    Utils.getCurrentUserName())
+  private val defaultAclUsers =
+    Set[String](System.getProperty("user.name", ""), Utils.getCurrentUserName())
 
   setViewAcls(defaultAclUsers, sparkConf.get(UI_VIEW_ACLS))
   setModifyAcls(defaultAclUsers, sparkConf.get(MODIFY_ACLS))
@@ -85,12 +86,13 @@ private[spark] class SecurityManager(
   setModifyAclsGroups(sparkConf.get(MODIFY_ACLS_GROUPS))
 
   private var secretKey: String = _
-  logInfo("SecurityManager: authentication " + (if (authOn) "enabled" else "disabled") +
-    "; ui acls " + (if (aclsOn) "enabled" else "disabled") +
-    "; users  with view permissions: " + viewAcls.toString() +
-    "; groups with view permissions: " + viewAclsGroups.toString() +
-    "; users  with modify permissions: " + modifyAcls.toString() +
-    "; groups with modify permissions: " + modifyAclsGroups.toString())
+  logInfo(
+    "SecurityManager: authentication " + (if (authOn) "enabled" else "disabled") +
+      "; ui acls " + (if (aclsOn) "enabled" else "disabled") +
+      "; users  with view permissions: " + viewAcls.toString() +
+      "; groups with view permissions: " + viewAclsGroups.toString() +
+      "; users  with modify permissions: " + modifyAcls.toString() +
+      "; groups with modify permissions: " + modifyAclsGroups.toString())
 
   private val hadoopConf = SparkHadoopUtil.get.newConfiguration(sparkConf)
   // the default SSL configuration - it will be used by all communication layers unless overwritten
@@ -233,8 +235,9 @@ private[spark] class SecurityManager(
    * @return true is the user has permission, otherwise false
    */
   def checkUIViewPermissions(user: String): Boolean = {
-    logDebug("user=" + user + " aclsEnabled=" + aclsEnabled() + " viewAcls=" +
-      viewAcls.mkString(",") + " viewAclsGroups=" + viewAclsGroups.mkString(","))
+    logDebug(
+      "user=" + user + " aclsEnabled=" + aclsEnabled() + " viewAcls=" +
+        viewAcls.mkString(",") + " viewAclsGroups=" + viewAclsGroups.mkString(","))
     isUserInACL(user, viewAcls, viewAclsGroups)
   }
 
@@ -249,8 +252,9 @@ private[spark] class SecurityManager(
    * @return true is the user has permission, otherwise false
    */
   def checkModifyPermissions(user: String): Boolean = {
-    logDebug("user=" + user + " aclsEnabled=" + aclsEnabled() + " modifyAcls=" +
-      modifyAcls.mkString(",") + " modifyAclsGroups=" + modifyAclsGroups.mkString(","))
+    logDebug(
+      "user=" + user + " aclsEnabled=" + aclsEnabled() + " modifyAcls=" +
+        modifyAcls.mkString(",") + " modifyAclsGroups=" + modifyAclsGroups.mkString(","))
     isUserInACL(user, modifyAcls, modifyAclsGroups)
   }
 
@@ -283,7 +287,9 @@ private[spark] class SecurityManager(
     if (isAuthenticationEnabled) {
       val creds = UserGroupInformation.getCurrentUser().getCredentials()
       Option(creds.getSecretKey(SECRET_LOOKUP_KEY))
-        .map { bytes => new String(bytes, UTF_8) }
+        .map { bytes =>
+          new String(bytes, UTF_8)
+        }
         // Secret key may not be found in current UGI's credentials.
         // This happens when UGI is refreshed in the driver side by UGI's loginFromKeytab but not
         // copy secret key from original UGI to the new one. This exists in ThriftServer's Hive
@@ -330,24 +336,28 @@ private[spark] class SecurityManager(
         false
 
       case mesosRegex() =>
-        require(sparkConf.contains(AUTH_SECRET_FILE.key) ||
-          sparkConf.contains(AUTH_SECRET_FILE_DRIVER.key) ||
-          sparkConf.contains(AUTH_SECRET_FILE_EXECUTOR.key) ||
-          sparkConf.contains(SPARK_AUTH_SECRET_CONF) || sparkConf.getenv(ENV_AUTH_SECRET_FILE) != null,
+        require(
+          sparkConf.contains(AUTH_SECRET_FILE.key) ||
+            sparkConf.contains(AUTH_SECRET_FILE_DRIVER.key) ||
+            sparkConf.contains(AUTH_SECRET_FILE_EXECUTOR.key) ||
+            sparkConf.contains(SPARK_AUTH_SECRET_CONF) || sparkConf
+            .getenv(ENV_AUTH_SECRET_FILE) != null,
           "A secret key must be specified via the " +
             AUTH_SECRET_FILE.key + " or " + SPARK_AUTH_SECRET_CONF + " config or " +
             ENV_AUTH_SECRET_FILE + " environment variable.")
         return
 
       case _ =>
-        require(sparkConf.contains(SPARK_AUTH_SECRET_CONF)  || sparkConf.getenv(ENV_AUTH_SECRET_FILE) != null,
+        require(
+          sparkConf
+            .contains(SPARK_AUTH_SECRET_CONF) || sparkConf.getenv(ENV_AUTH_SECRET_FILE) != null,
           s"A secret key must be specified via the $SPARK_AUTH_SECRET_CONF config or " +
             ENV_AUTH_SECRET_FILE + " environment variable.")
         return
     }
 
     if (sparkConf.get(AUTH_SECRET_FILE_DRIVER).isDefined !=
-        sparkConf.get(AUTH_SECRET_FILE_EXECUTOR).isDefined) {
+          sparkConf.get(AUTH_SECRET_FILE_EXECUTOR).isDefined) {
       throw new IllegalArgumentException(
         "Invalid secret configuration: Secret files must be specified for both the driver and the" +
           " executors, not only one or the other.")

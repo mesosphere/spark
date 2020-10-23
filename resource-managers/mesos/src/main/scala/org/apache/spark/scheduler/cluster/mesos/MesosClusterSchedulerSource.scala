@@ -18,6 +18,7 @@
 package org.apache.spark.scheduler.cluster.mesos
 
 import java.util.Date
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 import scala.collection.mutable.HashMap
@@ -27,8 +28,8 @@ import org.apache.mesos.Protos.{TaskState => MesosTaskState}
 
 import org.apache.spark.TaskState
 import org.apache.spark.deploy.mesos.MesosDriverDescription
-import org.apache.spark.metrics.source.Source
 import org.apache.spark.metrics.MetricsSystemInstances
+import org.apache.spark.metrics.source.Source
 
 private[mesos] class MesosClusterSchedulerSource(scheduler: MesosClusterScheduler)
   extends Source with MesosSchedulerUtils {
@@ -88,7 +89,8 @@ private[mesos] class MesosClusterSchedulerSource(scheduler: MesosClusterSchedule
     // Avoid registering 'finished' metrics for states that aren't considered finished:
     .filter(state => TaskState.isFinished(mesosToTaskState(state)))
     .map(state => (state, metricRegistry.counter(
-      MetricRegistry.name("drivers", "finished_count_mesos_state", state.name.toLowerCase))))
+      MetricRegistry.name(
+        "drivers", "finished_count_mesos_state", state.name.toLowerCase(Locale.ROOT)))))
     .toMap
   private val finishedMesosUnknownStateCounter =
     metricRegistry.counter(MetricRegistry.name("drivers", "finished_count_mesos_state", "UNKNOWN"))
@@ -123,7 +125,8 @@ private[mesos] class MesosClusterSchedulerSource(scheduler: MesosClusterSchedule
   for (state <- TaskState.values) {
     // Avoid registering 'finished' metrics for states that aren't considered finished:
     if (TaskState.isFinished(state)) {
-      finishSparkStateTimers += (state -> new FinishStateTimers(state.toString.toLowerCase))
+      finishSparkStateTimers += (state -> new FinishStateTimers(
+        state.toString.toLowerCase(Locale.ROOT)))
     }
   }
   private val submitToFinishUnknownState = metricRegistry.timer(

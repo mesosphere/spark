@@ -25,7 +25,7 @@ import javax.servlet.http.HttpServletResponse
 
 import org.apache.spark.{SPARK_VERSION => sparkVersion, SparkConf, SparkException}
 import org.apache.spark.deploy.Command
-import org.apache.spark.deploy.mesos.config._
+import org.apache.spark.deploy.mesos.{config => mesosConfig}
 import org.apache.spark.deploy.mesos.MesosDriverDescription
 import org.apache.spark.deploy.rest.{SubmitRestProtocolException, _}
 import org.apache.spark.internal.config
@@ -113,7 +113,8 @@ private[mesos] class MesosSubmitRequestServlet(
 
     validateLabelsFormat(sparkProperties)
 
-    val defaultConf = this.conf.getAllWithPrefix(DISPATCHER_DRIVER_DEFAULT_PREFIX).toMap
+    val defaultConf = this.conf.getAllWithPrefix(
+      mesosConfig.DISPATCHER_DRIVER_DEFAULT_PREFIX).toMap
     val driverConf = new SparkConf(false)
       .setAll(defaultConf)
       .setAll(sparkProperties)
@@ -121,7 +122,7 @@ private[mesos] class MesosSubmitRequestServlet(
     // role propagation and enforcement
     validateRole(sparkProperties)
     getDriverRoleOrDefault(sparkProperties).foreach { role =>
-      driverConf.set(ROLE.key, role)
+      driverConf.set(mesosConfig.ROLE.key, role)
     }
 
     // Construct driver description
@@ -182,11 +183,11 @@ private[mesos] class MesosSubmitRequestServlet(
    * users can submit jobs with any role.
    */
   private[mesos] def validateRole(properties: Map[String, String]): Unit = {
-    properties.get(ROLE.key).filter(_.nonEmpty).foreach { driverRole =>
-      conf.getOption(ROLE.key).filter(_.nonEmpty)
+    properties.get(mesosConfig.ROLE.key).filter(_.nonEmpty).foreach { driverRole =>
+      conf.getOption(mesosConfig.ROLE.key).filter(_.nonEmpty)
         .foreach { dispatcherRole =>
 
-        val roleEnforcementEnabled = conf.get(ENFORCE_DISPATCHER_ROLE)
+        val roleEnforcementEnabled = conf.get(mesosConfig.ENFORCE_DISPATCHER_ROLE)
 
         if (dispatcherRole != driverRole && roleEnforcementEnabled) {
             throw new SubmitRestProtocolException(
@@ -200,15 +201,16 @@ private[mesos] class MesosSubmitRequestServlet(
   }
 
   private[mesos] def getDriverRoleOrDefault(properties: Map[String, String]): Option[String] = {
-    if (properties.get(ROLE.key).isDefined) {
-       properties.get(ROLE.key)
+    if (properties.get(mesosConfig.ROLE.key).isDefined) {
+       properties.get(mesosConfig.ROLE.key)
     } else {
-      conf.getOption(ROLE.key)
+      conf.getOption(mesosConfig.ROLE.key)
     }
   }
 
   private[mesos] def validateLabelsFormat(properties: Map[String, String]): Unit = {
-    List(NETWORK_LABELS.key, TASK_LABELS.key, DRIVER_LABELS.key)
+    List(
+      mesosConfig.NETWORK_LABELS.key, mesosConfig.TASK_LABELS.key, mesosConfig.DRIVER_LABELS.key)
       .foreach { name =>
       properties.get(name) foreach { label =>
         try {
