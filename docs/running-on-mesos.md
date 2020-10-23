@@ -207,8 +207,6 @@ can find the results of the driver from the Mesos Web UI.
 
 To use cluster mode, you must start the `MesosClusterDispatcher` in your cluster via the `sbin/start-mesos-dispatcher.sh` script,
 passing in the Mesos master URL (e.g: mesos://host:5050). This starts the `MesosClusterDispatcher` as a daemon running on the host.
-Note that the `MesosClusterDispatcher` does not support authentication.  You should ensure that all network access to it is
-protected (port 7077 by default).
 
 By setting the Mesos proxy config property (requires mesos version >= 1.4), `--conf spark.mesos.proxy.baseURL=http://localhost:5050` when launching the dispatcher, the mesos sandbox URI for each driver is added to the mesos dispatcher UI.
 
@@ -404,6 +402,17 @@ See the [configuration page](configuration.html) for information on Spark config
     The value can be a floating point number.
   </td>
   <td>1.4.0</td>
+</tr>
+<tr>
+  <td><code>spark.mesos.checkpoint</code></td>
+  <td>false</td>
+  <td>
+    If set to true, the mesos agents that are running the Spark executors will write the framework pid, executor pids and status updates to disk. 
+    If the agent exits (e.g., due to a crash or as part of upgrading Mesos), this checkpointed data allows the restarted agent to 
+    reconnect to executors that were started by the old instance of the agent. Enabling checkpointing improves fault tolerance,
+    at the cost of a (usually small) increase in disk I/O.
+  </td>
+  <td>3.0.1</td>
 </tr>
 <tr>
   <td><code>spark.mesos.executor.docker.image</code></td>
@@ -735,13 +744,33 @@ See the [configuration page](configuration.html) for information on Spark config
   <td>2.1.0</td>
 </tr>
 <tr>
+  <td><code>spark.mesos.dispatcher.role.enforce</code></td>
+  <td><code>false</code></td>
+  <td>
+    When enabled, Mesos Dispatcher will reject all submissions which attempt to override
+    <pre>spark.mesos.role</pre> the Dispatcher is using itself. This flag should be
+    enabled when all the applications submitted to a single Dispatcher must be enforced
+    to use the same role.
+  </td>
+  <td>3.0.1</td>
+</tr>
+<tr>
   <td><code>spark.mesos.gpus.max</code></td>
   <td><code>0</code></td>
   <td>
-    Set the maximum number GPU resources to acquire for this job. Note that executors will still launch when no GPU resources are found
-    since this configuration is just an upper limit and not a guaranteed amount.
+    Set the maximum number GPU resources that can be acquired for this job.
+    If total number of gpus to request exceeds this setting, the new executors will not get launched.
+    The executors that have obtained gpus before exceeding this setting will still be launched.
   </td>
   <td>2.1.0</td>
+</tr>
+<tr>
+  <td><code>spark.mesos.executor.gpus</code></td>
+  <td><code>0</code></td>
+  <td>
+    Set the hard limit on the number of gpus to request for each executor.
+  </td>
+  <td>3.0.1</td>
 </tr>
 <tr>
   <td><code>spark.mesos.network.name</code></td>
@@ -819,6 +848,15 @@ See the [configuration page](configuration.html) for information on Spark config
     <code>spark.cores.max</code> is reached
   </td>
   <td>2.0.0</td>
+</tr>
+<tr>
+  <td><code>spark.mesos.scheduler.revive.interval</code></td>
+  <td><code>10s</code></td>
+  <td>
+    Amount of milliseconds between periodic revive calls to Mesos, when the job
+    driver is not suppressing resource offers.
+  </td>
+  <td>3.0.1</td>
 </tr>
 <tr>
   <td><code>spark.mesos.appJar.local.resolution.mode</code></td>

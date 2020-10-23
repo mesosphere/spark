@@ -39,12 +39,13 @@ package object config {
 
   private[spark] val RESOURCES_DISCOVERY_PLUGIN =
     ConfigBuilder("spark.resources.discoveryPlugin")
-      .doc("Comma-separated list of class names implementing" +
-        "org.apache.spark.api.resource.ResourceDiscoveryPlugin to load into the application." +
-        "This is for advanced users to replace the resource discovery class with a " +
-        "custom implementation. Spark will try each class specified until one of them " +
-        "returns the resource information for that resource. It tries the discovery " +
-        "script last if none of the plugins return information for that resource.")
+      .doc(
+        "Comma-separated list of class names implementing" +
+          "org.apache.spark.api.resource.ResourceDiscoveryPlugin to load into the application." +
+          "This is for advanced users to replace the resource discovery class with a " +
+          "custom implementation. Spark will try each class specified until one of them " +
+          "returns the resource information for that resource. It tries the discovery " +
+          "script last if none of the plugins return information for that resource.")
       .version("3.0.0")
       .stringConf
       .toSequence
@@ -53,9 +54,10 @@ package object config {
   private[spark] val DRIVER_RESOURCES_FILE =
     ConfigBuilder("spark.driver.resourcesFile")
       .internal()
-      .doc("Path to a file containing the resources allocated to the driver. " +
-        "The file should be formatted as a JSON array of ResourceAllocation objects. " +
-        "Only used internally in standalone mode.")
+      .doc(
+        "Path to a file containing the resources allocated to the driver. " +
+          "The file should be formatted as a JSON array of ResourceAllocation objects. " +
+          "Only used internally in standalone mode.")
       .version("3.0.0")
       .stringConf
       .createOptional
@@ -186,9 +188,10 @@ package object config {
 
   private[spark] val EVENT_LOG_GC_METRICS_OLD_GENERATION_GARBAGE_COLLECTORS =
     ConfigBuilder("spark.eventLog.gcMetrics.oldGenerationGarbageCollectors")
-      .doc("Names of supported old generation garbage collector. A name usually is " +
-        "the return of GarbageCollectorMXBean.getName. The built-in old generation garbage " +
-        s"collectors are ${GarbageCollectionMetrics.OLD_GENERATION_BUILTIN_GARBAGE_COLLECTORS}")
+      .doc(
+        "Names of supported old generation garbage collector. A name usually is " +
+          "the return of GarbageCollectorMXBean.getName. The built-in old generation garbage " +
+          s"collectors are ${GarbageCollectionMetrics.OLD_GENERATION_BUILTIN_GARBAGE_COLLECTORS}")
       .version("3.0.0")
       .stringConf
       .toSequence
@@ -216,12 +219,15 @@ package object config {
 
   private[spark] val EVENT_LOG_ROLLING_MAX_FILE_SIZE =
     ConfigBuilder("spark.eventLog.rolling.maxFileSize")
-      .doc(s"When ${EVENT_LOG_ENABLE_ROLLING.key}=true, specifies the max size of event log file" +
-        " to be rolled over.")
+      .doc(
+        s"When ${EVENT_LOG_ENABLE_ROLLING.key}=true, specifies the max size of event log file" +
+          " to be rolled over.")
       .version("3.0.0")
       .bytesConf(ByteUnit.BYTE)
-      .checkValue(_ >= ByteUnit.MiB.toBytes(10), "Max file size of event log should be " +
-        "configured to be at least 10 MiB.")
+      .checkValue(
+        _ >= ByteUnit.MiB.toBytes(10),
+        "Max file size of event log should be " +
+          "configured to be at least 10 MiB.")
       .createWithDefaultString("128m")
 
   private[spark] val EXECUTOR_ID =
@@ -255,17 +261,19 @@ package object config {
 
   private[spark] val EXECUTOR_PROCESS_TREE_METRICS_ENABLED =
     ConfigBuilder("spark.executor.processTreeMetrics.enabled")
-      .doc("Whether to collect process tree metrics (from the /proc filesystem) when collecting " +
-        "executor metrics.")
+      .doc(
+        "Whether to collect process tree metrics (from the /proc filesystem) when collecting " +
+          "executor metrics.")
       .version("3.0.0")
       .booleanConf
       .createWithDefault(false)
 
   private[spark] val EXECUTOR_METRICS_POLLING_INTERVAL =
     ConfigBuilder("spark.executor.metrics.pollingInterval")
-      .doc("How often to collect executor metrics (in milliseconds). " +
-        "If 0, the polling is done on executor heartbeats. " +
-        "If positive, the polling is done at this interval.")
+      .doc(
+        "How often to collect executor metrics (in milliseconds). " +
+          "If 0, the polling is done on executor heartbeats. " +
+          "If positive, the polling is done at this interval.")
       .version("3.0.0")
       .timeConf(TimeUnit.MILLISECONDS)
       .createWithDefaultString("0")
@@ -337,21 +345,23 @@ package object config {
     .createWithDefault(0)
 
   private[spark] val MEMORY_STORAGE_FRACTION = ConfigBuilder("spark.memory.storageFraction")
-    .doc("Amount of storage memory immune to eviction, expressed as a fraction of the " +
-      "size of the region set aside by spark.memory.fraction. The higher this is, the " +
-      "less working memory may be available to execution and tasks may spill to disk more " +
-      "often. Leaving this at the default value is recommended. ")
+    .doc(
+      "Amount of storage memory immune to eviction, expressed as a fraction of the " +
+        "size of the region set aside by spark.memory.fraction. The higher this is, the " +
+        "less working memory may be available to execution and tasks may spill to disk more " +
+        "often. Leaving this at the default value is recommended. ")
     .version("1.6.0")
     .doubleConf
     .checkValue(v => v >= 0.0 && v < 1.0, "Storage fraction must be in [0,1)")
     .createWithDefault(0.5)
 
   private[spark] val MEMORY_FRACTION = ConfigBuilder("spark.memory.fraction")
-    .doc("Fraction of (heap space - 300MB) used for execution and storage. The " +
-      "lower this is, the more frequently spills and cached data eviction occur. " +
-      "The purpose of this config is to set aside memory for internal metadata, " +
-      "user data structures, and imprecise size estimation in the case of sparse, " +
-      "unusually large records. Leaving this at the default value is recommended.  ")
+    .doc(
+      "Fraction of (heap space - 300MB) used for execution and storage. The " +
+        "lower this is, the more frequently spills and cached data eviction occur. " +
+        "The purpose of this config is to set aside memory for internal metadata, " +
+        "user data structures, and imprecise size estimation in the case of sparse, " +
+        "unusually large records. Leaving this at the default value is recommended.  ")
     .version("1.6.0")
     .doubleConf
     .createWithDefault(0.6)
@@ -370,21 +380,23 @@ package object config {
 
   private[spark] val STORAGE_REPLICATION_PROACTIVE =
     ConfigBuilder("spark.storage.replication.proactive")
-      .doc("Enables proactive block replication for RDD blocks. " +
-        "Cached RDD block replicas lost due to executor failures are replenished " +
-        "if there are any existing available replicas. This tries to " +
-        "get the replication level of the block to the initial number")
+      .doc(
+        "Enables proactive block replication for RDD blocks. " +
+          "Cached RDD block replicas lost due to executor failures are replenished " +
+          "if there are any existing available replicas. This tries to " +
+          "get the replication level of the block to the initial number")
       .version("2.2.0")
       .booleanConf
       .createWithDefault(false)
 
   private[spark] val STORAGE_MEMORY_MAP_THRESHOLD =
     ConfigBuilder("spark.storage.memoryMapThreshold")
-      .doc("Size in bytes of a block above which Spark memory maps when " +
-        "reading a block from disk. " +
-        "This prevents Spark from memory mapping very small blocks. " +
-        "In general, memory mapping has high overhead for blocks close to or below " +
-        "the page size of the operating system.")
+      .doc(
+        "Size in bytes of a block above which Spark memory maps when " +
+          "reading a block from disk. " +
+          "This prevents Spark from memory mapping very small blocks. " +
+          "In general, memory mapping has high overhead for blocks close to or below " +
+          "the page size of the operating system.")
       .version("0.9.2")
       .bytesConf(ByteUnit.BYTE)
       .createWithDefaultString("2m")
@@ -536,7 +548,8 @@ package object config {
   private[spark] val DYN_ALLOCATION_SCHEDULER_BACKLOG_TIMEOUT =
     ConfigBuilder("spark.dynamicAllocation.schedulerBacklogTimeout")
       .version("1.2.0")
-      .timeConf(TimeUnit.SECONDS).createWithDefault(1)
+      .timeConf(TimeUnit.SECONDS)
+      .createWithDefault(1)
 
   private[spark] val DYN_ALLOCATION_SUSTAINED_SCHEDULER_BACKLOG_TIMEOUT =
     ConfigBuilder("spark.dynamicAllocation.sustainedSchedulerBacklogTimeout")
@@ -556,10 +569,11 @@ package object config {
 
   private[spark] val SHUFFLE_SERVICE_FETCH_RDD_ENABLED =
     ConfigBuilder(Constants.SHUFFLE_SERVICE_FETCH_RDD_ENABLED)
-      .doc("Whether to use the ExternalShuffleService for fetching disk persisted RDD blocks. " +
-        "In case of dynamic allocation if this feature is enabled executors having only disk " +
-        "persisted blocks are considered idle after " +
-        "'spark.dynamicAllocation.executorIdleTimeout' and will be released accordingly.")
+      .doc(
+        "Whether to use the ExternalShuffleService for fetching disk persisted RDD blocks. " +
+          "In case of dynamic allocation if this feature is enabled executors having only disk " +
+          "persisted blocks are considered idle after " +
+          "'spark.dynamicAllocation.executorIdleTimeout' and will be released accordingly.")
       .version("3.0.0")
       .booleanConf
       .createWithDefault(false)
@@ -578,7 +592,8 @@ package object config {
   private[spark] val KEYTAB = ConfigBuilder("spark.kerberos.keytab")
     .doc("Location of user's keytab.")
     .version("3.0.0")
-    .stringConf.createOptional
+    .stringConf
+    .createOptional
 
   private[spark] val PRINCIPAL = ConfigBuilder("spark.kerberos.principal")
     .doc("Name of the Kerberos principal.")
@@ -595,8 +610,8 @@ package object config {
     ConfigBuilder("spark.kerberos.renewal.credentials")
       .doc(
         "Which credentials to use when renewing delegation tokens for executors. Can be either " +
-        "'keytab', the default, which requires a keytab to be provided, or 'ccache', which uses " +
-        "the local credentials cache.")
+          "'keytab', the default, which requires a keytab to be provided, or 'ccache', " +
+          "which uses the local credentials cache.")
       .version("3.0.0")
       .stringConf
       .checkValues(Set("keytab", "ccache"))
@@ -604,12 +619,13 @@ package object config {
 
   private[spark] val KERBEROS_FILESYSTEMS_TO_ACCESS =
     ConfigBuilder("spark.kerberos.access.hadoopFileSystems")
-    .doc("Extra Hadoop filesystem URLs for which to request delegation tokens. The filesystem " +
-      "that hosts fs.defaultFS does not need to be listed here.")
-    .version("3.0.0")
-    .stringConf
-    .toSequence
-    .createWithDefault(Nil)
+      .doc(
+        "Extra Hadoop filesystem URLs for which to request delegation tokens. The filesystem " +
+          "that hosts fs.defaultFS does not need to be listed here.")
+      .version("3.0.0")
+      .stringConf
+      .toSequence
+      .createWithDefault(Nil)
 
   private[spark] val EXECUTOR_INSTANCES = ConfigBuilder("spark.executor.instances")
     .version("1.0.0")
@@ -730,19 +746,21 @@ package object config {
 
   private[spark] val UNREGISTER_OUTPUT_ON_HOST_ON_FETCH_FAILURE =
     ConfigBuilder("spark.files.fetchFailure.unRegisterOutputOnHost")
-      .doc("Whether to un-register all the outputs on the host in condition that we receive " +
-        " a FetchFailure. This is set default to false, which means, we only un-register the " +
-        " outputs related to the exact executor(instead of the host) on a FetchFailure.")
+      .doc(
+        "Whether to un-register all the outputs on the host in condition that we receive " +
+          " a FetchFailure. This is set default to false, which means, we only un-register the " +
+          " outputs related to the exact executor(instead of the host) on a FetchFailure.")
       .version("2.3.0")
       .booleanConf
       .createWithDefault(false)
 
   private[spark] val LISTENER_BUS_EVENT_QUEUE_CAPACITY =
     ConfigBuilder("spark.scheduler.listenerbus.eventqueue.capacity")
-      .doc("The default capacity for event queues. Spark will try to initialize " +
-        "an event queue using capacity specified by `spark.scheduler.listenerbus" +
-        ".eventqueue.queueName.capacity` first. If it's not configured, Spark will " +
-        "use the default capacity specified by this config.")
+      .doc(
+        "The default capacity for event queues. Spark will try to initialize " +
+          "an event queue using capacity specified by `spark.scheduler.listenerbus" +
+          ".eventqueue.queueName.capacity` first. If it's not configured, Spark will " +
+          "use the default capacity specified by this config.")
       .version("2.3.0")
       .intConf
       .checkValue(_ > 0, "The capacity of listener bus event queue must be positive")
@@ -758,9 +776,10 @@ package object config {
   private[spark] val LISTENER_BUS_LOG_SLOW_EVENT_ENABLED =
     ConfigBuilder("spark.scheduler.listenerbus.logSlowEvent")
       .internal()
-      .doc("When enabled, log the event that takes too much time to process. This helps us " +
-        "discover the event types that cause performance bottlenecks. The time threshold is " +
-        "controlled by spark.scheduler.listenerbus.logSlowEvent.threshold.")
+      .doc(
+        "When enabled, log the event that takes too much time to process. This helps us " +
+          "discover the event types that cause performance bottlenecks. The time threshold is " +
+          "controlled by spark.scheduler.listenerbus.logSlowEvent.threshold.")
       .version("3.0.0")
       .booleanConf
       .createWithDefault(true)
@@ -827,11 +846,12 @@ package object config {
       .stringConf
       .createWithDefault("HmacSHA1")
 
-  private[spark] val IO_ENCRYPTION_KEY_SIZE_BITS = ConfigBuilder("spark.io.encryption.keySizeBits")
-    .version("2.1.0")
-    .intConf
-    .checkValues(Set(128, 192, 256))
-    .createWithDefault(128)
+  private[spark] val IO_ENCRYPTION_KEY_SIZE_BITS =
+    ConfigBuilder("spark.io.encryption.keySizeBits")
+      .version("2.1.0")
+      .intConf
+      .checkValues(Set(128, 192, 256))
+      .createWithDefault(128)
 
   private[spark] val IO_CRYPTO_CIPHER_TRANSFORMATION =
     ConfigBuilder("spark.io.crypto.cipher.transformation")
@@ -966,7 +986,7 @@ package object config {
       .doc("Path to a file that contains the authentication secret to use. The secret key is " +
         "loaded from this path on both the driver and the executors if overrides are not set for " +
         "either entity (see below). File-based secret keys are only allowed when using " +
-        "Kubernetes.")
+        "Kubernetes or Mesos.")
       .version("3.0.0")
       .stringConf
       .createOptional
@@ -979,19 +999,20 @@ package object config {
         "a pod unlike the executors. If this is set, an accompanying secret file must " +
         "be specified for the executors. The fallback configuration allows the same path to be " +
         "used for both the driver and the executors when running in cluster mode. File-based " +
-        "secret keys are only allowed when using Kubernetes.")
+        "secret keys are only allowed when using Kubernetes or Mesos.")
       .version("3.0.0")
       .fallbackConf(AUTH_SECRET_FILE)
 
   private[spark] val AUTH_SECRET_FILE_EXECUTOR =
     ConfigBuilder("spark.authenticate.secret.executor.file")
-      .doc("Path to a file that contains the authentication secret to use. Loaded by the " +
-        "executors only. In Kubernetes client mode it is often useful to set a different " +
-        "secret path for the driver vs. the executors, since the driver may not be running " +
-        "in a pod unlike the executors. If this is set, an accompanying secret file must be " +
-        "specified for the executors. The fallback configuration allows the same path to be " +
-        "used for both the driver and the executors when running in cluster mode. File-based " +
-        "secret keys are only allowed when using Kubernetes.")
+      .doc(
+        "Path to a file that contains the authentication secret to use. Loaded by the " +
+          "executors only. In Kubernetes client mode it is often useful to set a different " +
+          "secret path for the driver vs. the executors, since the driver may not be running " +
+          "in a pod unlike the executors. If this is set, an accompanying secret file must be " +
+          "specified for the executors. The fallback configuration allows the same path to be " +
+          "used for both the driver and the executors when running in cluster mode. File-based " +
+          "secret keys are only allowed when using Kubernetes or Mesos.")
       .version("3.0.0")
       .fallbackConf(AUTH_SECRET_FILE)
 
@@ -1001,7 +1022,8 @@ package object config {
       .doc("The chunk size in bytes during writing out the bytes of ChunkedByteBuffer.")
       .version("2.3.0")
       .bytesConf(ByteUnit.BYTE)
-      .checkValue(_ <= ByteArrayMethods.MAX_ROUNDED_ARRAY_LENGTH,
+      .checkValue(
+        _ <= ByteArrayMethods.MAX_ROUNDED_ARRAY_LENGTH,
         "The chunk size during writing out the bytes of ChunkedByteBuffer should" +
           s" be less than or equal to ${ByteArrayMethods.MAX_ROUNDED_ARRAY_LENGTH}.")
       .createWithDefault(64 * 1024 * 1024)
@@ -1017,20 +1039,24 @@ package object config {
   private[spark] val CACHE_CHECKPOINT_PREFERRED_LOCS_EXPIRE_TIME =
     ConfigBuilder("spark.rdd.checkpoint.cachePreferredLocsExpireTime")
       .internal()
-      .doc("Expire time in minutes for caching preferred locations of checkpointed RDD." +
-        "Caching preferred locations can relieve query loading to DFS and save the query " +
-        "time. The drawback is that the cached locations can be possibly outdated and " +
-        "lose data locality. If this config is not specified, it will not cache.")
+      .doc(
+        "Expire time in minutes for caching preferred locations of checkpointed RDD." +
+          "Caching preferred locations can relieve query loading to DFS and save the query " +
+          "time. The drawback is that the cached locations can be possibly outdated and " +
+          "lose data locality. If this config is not specified, it will not cache.")
       .version("3.0.0")
       .timeConf(TimeUnit.MINUTES)
-      .checkValue(_ > 0, "The expire time for caching preferred locations cannot be non-positive.")
+      .checkValue(
+        _ > 0,
+        "The expire time for caching preferred locations cannot be non-positive.")
       .createOptional
 
   private[spark] val SHUFFLE_ACCURATE_BLOCK_THRESHOLD =
     ConfigBuilder("spark.shuffle.accurateBlockThreshold")
-      .doc("Threshold in bytes above which the size of shuffle blocks in " +
-        "HighlyCompressedMapStatus is accurately recorded. This helps to prevent OOM " +
-        "by avoiding underestimating shuffle block size when fetch shuffle blocks.")
+      .doc(
+        "Threshold in bytes above which the size of shuffle blocks in " +
+          "HighlyCompressedMapStatus is accurately recorded. This helps to prevent OOM " +
+          "by avoiding underestimating shuffle block size when fetch shuffle blocks.")
       .version("2.2.1")
       .bytesConf(ByteUnit.BYTE)
       .createWithDefault(100 * 1024 * 1024)
@@ -1064,11 +1090,12 @@ package object config {
 
   private[spark] val MAX_REMOTE_BLOCK_SIZE_FETCH_TO_MEM =
     ConfigBuilder("spark.network.maxRemoteBlockSizeFetchToMem")
-      .doc("Remote block will be fetched to disk when size of the block is above this threshold " +
-        "in bytes. This is to avoid a giant request takes too much memory. Note this " +
-        "configuration will affect both shuffle fetch and block manager remote block fetch. " +
-        "For users who enabled external shuffle service, this feature can only work when " +
-        "external shuffle service is at least 2.3.0.")
+      .doc(
+        "Remote block will be fetched to disk when size of the block is above this threshold " +
+          "in bytes. This is to avoid a giant request takes too much memory. Note this " +
+          "configuration will affect both shuffle fetch and block manager remote block fetch. " +
+          "For users who enabled external shuffle service, this feature can only work when " +
+          "external shuffle service is at least 2.3.0.")
       .version("3.0.0")
       .bytesConf(ByteUnit.BYTE)
       // fetch-to-mem is guaranteed to fail if the message is bigger than 2 GB, so we might
@@ -1098,12 +1125,14 @@ package object config {
 
   private[spark] val SHUFFLE_FILE_BUFFER_SIZE =
     ConfigBuilder("spark.shuffle.file.buffer")
-      .doc("Size of the in-memory buffer for each shuffle file output stream, in KiB unless " +
-        "otherwise specified. These buffers reduce the number of disk seeks and system calls " +
-        "made in creating intermediate shuffle files.")
+      .doc(
+        "Size of the in-memory buffer for each shuffle file output stream, in KiB unless " +
+          "otherwise specified. These buffers reduce the number of disk seeks and system calls " +
+          "made in creating intermediate shuffle files.")
       .version("1.4.0")
       .bytesConf(ByteUnit.KiB)
-      .checkValue(v => v > 0 && v <= ByteArrayMethods.MAX_ROUNDED_ARRAY_LENGTH / 1024,
+      .checkValue(
+        v => v > 0 && v <= ByteArrayMethods.MAX_ROUNDED_ARRAY_LENGTH / 1024,
         s"The file buffer size must be positive and less than or equal to" +
           s" ${ByteArrayMethods.MAX_ROUNDED_ARRAY_LENGTH / 1024}.")
       .createWithDefaultString("32k")
@@ -1114,17 +1143,20 @@ package object config {
         "is written in unsafe shuffle writer. In KiB unless otherwise specified.")
       .version("2.3.0")
       .bytesConf(ByteUnit.KiB)
-      .checkValue(v => v > 0 && v <= ByteArrayMethods.MAX_ROUNDED_ARRAY_LENGTH / 1024,
+      .checkValue(
+        v => v > 0 && v <= ByteArrayMethods.MAX_ROUNDED_ARRAY_LENGTH / 1024,
         s"The buffer size must be positive and less than or equal to" +
           s" ${ByteArrayMethods.MAX_ROUNDED_ARRAY_LENGTH / 1024}.")
       .createWithDefaultString("32k")
 
   private[spark] val SHUFFLE_DISK_WRITE_BUFFER_SIZE =
     ConfigBuilder("spark.shuffle.spill.diskWriteBufferSize")
-      .doc("The buffer size, in bytes, to use when writing the sorted records to an on-disk file.")
+      .doc(
+        "The buffer size, in bytes, to use when writing the sorted records to an on-disk file.")
       .version("2.3.0")
       .bytesConf(ByteUnit.BYTE)
-      .checkValue(v => v > 12 && v <= ByteArrayMethods.MAX_ROUNDED_ARRAY_LENGTH,
+      .checkValue(
+        v => v > 12 && v <= ByteArrayMethods.MAX_ROUNDED_ARRAY_LENGTH,
         s"The buffer size must be greater than 12 and less than or equal to " +
           s"${ByteArrayMethods.MAX_ROUNDED_ARRAY_LENGTH}.")
       .createWithDefault(1024 * 1024)
@@ -1168,10 +1200,11 @@ package object config {
   private[spark] val SHUFFLE_SPILL_NUM_ELEMENTS_FORCE_SPILL_THRESHOLD =
     ConfigBuilder("spark.shuffle.spill.numElementsForceSpillThreshold")
       .internal()
-      .doc("The maximum number of elements in memory before forcing the shuffle sorter to spill. " +
-        "By default it's Integer.MAX_VALUE, which means we never force the sorter to spill, " +
-        "until we reach some limitations, like the max page size limitation for the pointer " +
-        "array in the sorter.")
+      .doc(
+        "The maximum number of elements in memory before forcing the shuffle sorter to spill. " +
+          "By default it's Integer.MAX_VALUE, which means we never force the sorter to spill, " +
+          "until we reach some limitations, like the max page size limitation for the pointer " +
+          "array in the sorter.")
       .version("1.6.0")
       .intConf
       .createWithDefault(Integer.MAX_VALUE)
@@ -1212,7 +1245,8 @@ package object config {
       .internal()
       .version("2.1.0")
       .bytesConf(ByteUnit.BYTE)
-      .checkValue(v => v > 0 && v <= Int.MaxValue,
+      .checkValue(
+        v => v > 0 && v <= Int.MaxValue,
         s"The buffer size must be greater than 0 and less than or equal to ${Int.MaxValue}.")
       .createWithDefault(4096)
 
@@ -1235,9 +1269,10 @@ package object config {
   private[spark] val MAP_STATUS_COMPRESSION_CODEC =
     ConfigBuilder("spark.shuffle.mapStatus.compression.codec")
       .internal()
-      .doc("The codec used to compress MapStatus, which is generated by ShuffleMapTask. " +
-        "By default, Spark provides four codecs: lz4, lzf, snappy, and zstd. You can also " +
-        "use fully qualified class names to specify the codec.")
+      .doc(
+        "The codec used to compress MapStatus, which is generated by ShuffleMapTask. " +
+          "By default, Spark provides four codecs: lz4, lzf, snappy, and zstd. You can also " +
+          "use fully qualified class names to specify the codec.")
       .version("3.0.0")
       .stringConf
       .createWithDefault("zstd")
@@ -1302,10 +1337,11 @@ package object config {
 
   private[spark] val SHUFFLE_DETECT_CORRUPT_MEMORY =
     ConfigBuilder("spark.shuffle.detectCorrupt.useExtraMemory")
-      .doc("If enabled, part of a compressed/encrypted stream will be de-compressed/de-crypted " +
-        "by using extra memory to detect early corruption. Any IOException thrown will cause " +
-        "the task to be retried once and if it fails again with same exception, then " +
-        "FetchFailedException will be thrown to retry previous stage")
+      .doc(
+        "If enabled, part of a compressed/encrypted stream will be de-compressed/de-crypted " +
+          "by using extra memory to detect early corruption. Any IOException thrown will cause " +
+          "the task to be retried once and if it fails again with same exception, then " +
+          "FetchFailedException will be thrown to retry previous stage")
       .version("3.0.0")
       .booleanConf
       .createWithDefault(false)
@@ -1343,9 +1379,10 @@ package object config {
 
   private[spark] val SHUFFLE_USE_OLD_FETCH_PROTOCOL =
     ConfigBuilder("spark.shuffle.useOldFetchProtocol")
-      .doc("Whether to use the old protocol while doing the shuffle block fetching. " +
-        "It is only enabled while we need the compatibility in the scenario of new Spark " +
-        "version job fetching shuffle blocks from old version external shuffle service.")
+      .doc(
+        "Whether to use the old protocol while doing the shuffle block fetching. " +
+          "It is only enabled while we need the compatibility in the scenario of new Spark " +
+          "version job fetching shuffle blocks from old version external shuffle service.")
       .version("3.0.0")
       .booleanConf
       .createWithDefault(false)
@@ -1447,7 +1484,8 @@ package object config {
       .internal()
       .version("2.1.0")
       .bytesConf(ByteUnit.BYTE)
-      .checkValue(v => 1024 * 1024 <= v && v <= MAX_BUFFER_SIZE_BYTES,
+      .checkValue(
+        v => 1024 * 1024 <= v && v <= MAX_BUFFER_SIZE_BYTES,
         s"The value must be in allowed range [1,048,576, ${MAX_BUFFER_SIZE_BYTES}].")
       .createWithDefault(1024 * 1024)
 
@@ -1526,7 +1564,7 @@ package object config {
   private[spark] val MASTER_REST_SERVER_ENABLED = ConfigBuilder("spark.master.rest.enabled")
     .version("1.3.0")
     .booleanConf
-    .createWithDefault(false)
+    .createWithDefault(true)
 
   private[spark] val MASTER_REST_SERVER_PORT = ConfigBuilder("spark.master.rest.port")
     .version("1.3.0")
@@ -1540,38 +1578,42 @@ package object config {
 
   private[spark] val IO_COMPRESSION_SNAPPY_BLOCKSIZE =
     ConfigBuilder("spark.io.compression.snappy.blockSize")
-      .doc("Block size in bytes used in Snappy compression, in the case when " +
-        "Snappy compression codec is used. Lowering this block size " +
-        "will also lower shuffle memory usage when Snappy is used")
+      .doc(
+        "Block size in bytes used in Snappy compression, in the case when " +
+          "Snappy compression codec is used. Lowering this block size " +
+          "will also lower shuffle memory usage when Snappy is used")
       .version("1.4.0")
       .bytesConf(ByteUnit.BYTE)
       .createWithDefaultString("32k")
 
   private[spark] val IO_COMPRESSION_LZ4_BLOCKSIZE =
     ConfigBuilder("spark.io.compression.lz4.blockSize")
-      .doc("Block size in bytes used in LZ4 compression, in the case when LZ4 compression" +
-        "codec is used. Lowering this block size will also lower shuffle memory " +
-        "usage when LZ4 is used.")
+      .doc(
+        "Block size in bytes used in LZ4 compression, in the case when LZ4 compression" +
+          "codec is used. Lowering this block size will also lower shuffle memory " +
+          "usage when LZ4 is used.")
       .version("1.4.0")
       .bytesConf(ByteUnit.BYTE)
       .createWithDefaultString("32k")
 
   private[spark] val IO_COMPRESSION_CODEC =
     ConfigBuilder("spark.io.compression.codec")
-      .doc("The codec used to compress internal data such as RDD partitions, event log, " +
-        "broadcast variables and shuffle outputs. By default, Spark provides four codecs: " +
-        "lz4, lzf, snappy, and zstd. You can also use fully qualified class names to specify " +
-        "the codec")
+      .doc(
+        "The codec used to compress internal data such as RDD partitions, event log, " +
+          "broadcast variables and shuffle outputs. By default, Spark provides four codecs: " +
+          "lz4, lzf, snappy, and zstd. You can also use fully qualified class names to specify " +
+          "the codec")
       .version("0.8.0")
       .stringConf
       .createWithDefaultString("lz4")
 
   private[spark] val IO_COMPRESSION_ZSTD_BUFFERSIZE =
     ConfigBuilder("spark.io.compression.zstd.bufferSize")
-      .doc("Buffer size in bytes used in Zstd compression, in the case when Zstd " +
-        "compression codec is used. Lowering this size will lower the shuffle " +
-        "memory usage when Zstd is used, but it might increase the compression " +
-        "cost because of excessive JNI call overhead")
+      .doc(
+        "Buffer size in bytes used in Zstd compression, in the case when Zstd " +
+          "compression codec is used. Lowering this size will lower the shuffle " +
+          "memory usage when Zstd is used, but it might increase the compression " +
+          "cost because of excessive JNI call overhead")
       .version("2.3.0")
       .bytesConf(ByteUnit.BYTE)
       .createWithDefaultString("32k")
@@ -1595,9 +1637,10 @@ package object config {
 
   private[spark] val EVENT_LOG_COMPRESSION_CODEC =
     ConfigBuilder("spark.eventLog.compression.codec")
-      .doc("The codec used to compress event log. By default, Spark provides four codecs: " +
-        "lz4, lzf, snappy, and zstd. You can also use fully qualified class names to specify " +
-        "the codec. If this is not given, spark.io.compression.codec will be used.")
+      .doc(
+        "The codec used to compress event log. By default, Spark provides four codecs: " +
+          "lz4, lzf, snappy, and zstd. You can also use fully qualified class names to specify " +
+          "the codec. If this is not given, spark.io.compression.codec will be used.")
       .version("3.0.0")
       .fallbackConf(IO_COMPRESSION_CODEC)
 
@@ -1621,20 +1664,22 @@ package object config {
     .fallbackConf(LOCALITY_WAIT)
 
   private[spark] val REDUCER_MAX_SIZE_IN_FLIGHT = ConfigBuilder("spark.reducer.maxSizeInFlight")
-    .doc("Maximum size of map outputs to fetch simultaneously from each reduce task, " +
-      "in MiB unless otherwise specified. Since each output requires us to create a " +
-      "buffer to receive it, this represents a fixed memory overhead per reduce task, " +
-      "so keep it small unless you have a large amount of memory")
+    .doc(
+      "Maximum size of map outputs to fetch simultaneously from each reduce task, " +
+        "in MiB unless otherwise specified. Since each output requires us to create a " +
+        "buffer to receive it, this represents a fixed memory overhead per reduce task, " +
+        "so keep it small unless you have a large amount of memory")
     .version("1.4.0")
     .bytesConf(ByteUnit.MiB)
     .createWithDefaultString("48m")
 
   private[spark] val REDUCER_MAX_REQS_IN_FLIGHT = ConfigBuilder("spark.reducer.maxReqsInFlight")
-    .doc("This configuration limits the number of remote requests to fetch blocks at " +
-      "any given point. When the number of hosts in the cluster increase, " +
-      "it might lead to very large number of inbound connections to one or more nodes, " +
-      "causing the workers to fail under load. By allowing it to limit the number of " +
-      "fetch requests, this scenario can be mitigated")
+    .doc(
+      "This configuration limits the number of remote requests to fetch blocks at " +
+        "any given point. When the number of hosts in the cluster increase, " +
+        "it might lead to very large number of inbound connections to one or more nodes, " +
+        "causing the workers to fail under load. By allowing it to limit the number of " +
+        "fetch requests, this scenario can be mitigated")
     .version("2.0.0")
     .intConf
     .createWithDefault(Int.MaxValue)
@@ -1643,23 +1688,26 @@ package object config {
     .doc("Whether to compress broadcast variables before sending them. " +
       "Generally a good idea. Compression will use spark.io.compression.codec")
     .version("0.6.0")
-    .booleanConf.createWithDefault(true)
+    .booleanConf
+    .createWithDefault(true)
 
   private[spark] val BROADCAST_BLOCKSIZE = ConfigBuilder("spark.broadcast.blockSize")
-    .doc("Size of each piece of a block for TorrentBroadcastFactory, in " +
-      "KiB unless otherwise specified. Too large a value decreases " +
-      "parallelism during broadcast (makes it slower); however, " +
-      "if it is too small, BlockManager might take a performance hit")
+    .doc(
+      "Size of each piece of a block for TorrentBroadcastFactory, in " +
+        "KiB unless otherwise specified. Too large a value decreases " +
+        "parallelism during broadcast (makes it slower); however, " +
+        "if it is too small, BlockManager might take a performance hit")
     .version("0.5.0")
     .bytesConf(ByteUnit.KiB)
     .createWithDefaultString("4m")
 
   private[spark] val BROADCAST_CHECKSUM = ConfigBuilder("spark.broadcast.checksum")
-    .doc("Whether to enable checksum for broadcast. If enabled, " +
-      "broadcasts will include a checksum, which can help detect " +
-      "corrupted blocks, at the cost of computing and sending a little " +
-      "more data. It's possible to disable it if the network has other " +
-      "mechanisms to guarantee data won't be corrupted during broadcast")
+    .doc(
+      "Whether to enable checksum for broadcast. If enabled, " +
+        "broadcasts will include a checksum, which can help detect " +
+        "corrupted blocks, at the cost of computing and sending a little " +
+        "more data. It's possible to disable it if the network has other " +
+        "mechanisms to guarantee data won't be corrupted during broadcast")
     .version("2.1.1")
     .booleanConf
     .createWithDefault(true)
@@ -1674,11 +1722,12 @@ package object config {
       .createWithDefault(1L * 1024 * 1024)
 
   private[spark] val RDD_COMPRESS = ConfigBuilder("spark.rdd.compress")
-    .doc("Whether to compress serialized RDD partitions " +
-      "(e.g. for StorageLevel.MEMORY_ONLY_SER in Scala " +
-      "or StorageLevel.MEMORY_ONLY in Python). Can save substantial " +
-      "space at the cost of some extra CPU time. " +
-      "Compression will use spark.io.compression.codec")
+    .doc(
+      "Whether to compress serialized RDD partitions " +
+        "(e.g. for StorageLevel.MEMORY_ONLY_SER in Scala " +
+        "or StorageLevel.MEMORY_ONLY in Python). Can save substantial " +
+        "space at the cost of some extra CPU time. " +
+        "Compression will use spark.io.compression.codec")
     .version("0.6.0")
     .booleanConf
     .createWithDefault(false)
@@ -1706,10 +1755,11 @@ package object config {
       .intConf
       .createWithDefault(100)
 
-  private[spark] val SERIALIZER_EXTRA_DEBUG_INFO = ConfigBuilder("spark.serializer.extraDebugInfo")
-    .version("1.3.0")
-    .booleanConf
-    .createWithDefault(true)
+  private[spark] val SERIALIZER_EXTRA_DEBUG_INFO =
+    ConfigBuilder("spark.serializer.extraDebugInfo")
+      .version("1.3.0")
+      .booleanConf
+      .createWithDefault(true)
 
   private[spark] val JARS = ConfigBuilder("spark.jars")
     .version("0.9.0")

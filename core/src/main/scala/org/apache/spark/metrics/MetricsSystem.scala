@@ -71,7 +71,7 @@ private[spark] class MetricsSystem private (
     val instance: String,
     conf: SparkConf,
     securityMgr: SecurityManager)
-  extends Logging {
+    extends Logging {
 
   private[this] val metricsConfig = new MetricsConfig(conf)
 
@@ -143,16 +143,20 @@ private[spark] class MetricsSystem private (
         // Only Driver and Executor set spark.app.id and spark.executor.id.
         // Other instance types, e.g. Master and Worker, are not related to a specific application.
         if (metricsNamespace.isEmpty) {
-          logWarning(s"Using default name $defaultName for source because neither " +
-            s"${METRICS_NAMESPACE.key} nor spark.app.id is set.")
+          logWarning(
+            s"Using default name $defaultName for source because neither " +
+              s"${METRICS_NAMESPACE.key} nor spark.app.id is set.")
         }
         if (executorId.isEmpty) {
-          logWarning(s"Using default name $defaultName for source because spark.executor.id is " +
-            s"not set.")
+          logWarning(
+            s"Using default name $defaultName for source because spark.executor.id is " +
+              s"not set.")
         }
         defaultName
       }
-    } else { defaultName }
+    } else {
+      defaultName
+    }
   }
 
   def getSourcesByName(sourceName: String): Seq[Source] =
@@ -162,6 +166,7 @@ private[spark] class MetricsSystem private (
     sources += source
     try {
       val regName = buildRegistryName(source)
+      logInfo(s"Registering source: $regName")
       registry.register(regName, source.metricRegistry)
     } catch {
       case e: IllegalArgumentException => logInfo("Metrics already registered", e)
@@ -171,6 +176,7 @@ private[spark] class MetricsSystem private (
   def removeSource(source: Source): Unit = {
     sources -= source
     val regName = buildRegistryName(source)
+    logInfo(s"Removing source: $regName")
     registry.removeMatching((name: String, _: Metric) => name.startsWith(regName))
   }
 
@@ -197,29 +203,39 @@ private[spark] class MetricsSystem private (
     sinkConfigs.foreach { kv =>
       val classPath = kv._2.getProperty("class")
       if (null != classPath) {
+        logInfo(s"Initializing sink: $classPath")
         try {
           if (kv._1 == "servlet") {
-            val servlet = Utils.classForName[MetricsServlet](classPath)
+            val servlet = Utils
+              .classForName[MetricsServlet](classPath)
               .getConstructor(
-                classOf[Properties], classOf[MetricRegistry], classOf[SecurityManager])
+                classOf[Properties],
+                classOf[MetricRegistry],
+                classOf[SecurityManager])
               .newInstance(kv._2, registry, securityMgr)
             metricsServlet = Some(servlet)
           } else if (kv._1 == "prometheusServlet") {
-            val servlet = Utils.classForName[PrometheusServlet](classPath)
+            val servlet = Utils
+              .classForName[PrometheusServlet](classPath)
               .getConstructor(
-                classOf[Properties], classOf[MetricRegistry], classOf[SecurityManager])
+                classOf[Properties],
+                classOf[MetricRegistry],
+                classOf[SecurityManager])
               .newInstance(kv._2, registry, securityMgr)
             prometheusServlet = Some(servlet)
           } else {
-            val sink = Utils.classForName[Sink](classPath)
+            val sink = Utils
+              .classForName[Sink](classPath)
               .getConstructor(
-                classOf[Properties], classOf[MetricRegistry], classOf[SecurityManager])
+                classOf[Properties],
+                classOf[MetricRegistry],
+                classOf[SecurityManager])
               .newInstance(kv._2, registry, securityMgr)
             sinks += sink
           }
         } catch {
           case e: Exception =>
-            logError("Sink class " + classPath + " cannot be instantiated")
+            logError(s"Sink class $classPath cannot be instantiated")
             throw e
         }
       }
@@ -237,13 +253,16 @@ private[spark] object MetricsSystem {
   def checkMinimalPollingPeriod(pollUnit: TimeUnit, pollPeriod: Int): Unit = {
     val period = MINIMAL_POLL_UNIT.convert(pollPeriod, pollUnit)
     if (period < MINIMAL_POLL_PERIOD) {
-      throw new IllegalArgumentException("Polling period " + pollPeriod + " " + pollUnit +
-        " below than minimal polling period ")
+      throw new IllegalArgumentException(
+        "Polling period " + pollPeriod + " " + pollUnit +
+          " below than minimal polling period ")
     }
   }
 
   def createMetricsSystem(
-      instance: String, conf: SparkConf, securityMgr: SecurityManager): MetricsSystem = {
+      instance: String,
+      conf: SparkConf,
+      securityMgr: SecurityManager): MetricsSystem = {
     new MetricsSystem(instance, conf, securityMgr)
   }
 }
@@ -272,4 +291,10 @@ private[spark] object MetricsSystemInstances {
 
   // The Spark cluster scheduler when running on Mesos
   val MESOS_CLUSTER = "mesos_cluster"
+
+  // The Spark scheduler when running on Mesos
+  val MESOS = "mesos"
+
+  // The Spark dispatcher process
+  val DISPATCHER = "dispatcher"
 }

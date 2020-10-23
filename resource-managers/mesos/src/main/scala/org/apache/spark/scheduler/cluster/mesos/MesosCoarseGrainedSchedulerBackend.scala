@@ -18,7 +18,7 @@
 package org.apache.spark.scheduler.cluster.mesos
 
 import java.io.File
-import java.util.{Collections, List => JList}
+import java.util.{Collections, List => JList, UUID}
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.ReentrantLock
@@ -41,7 +41,7 @@ import org.apache.spark.network.shuffle.mesos.MesosExternalBlockStoreClient
 import org.apache.spark.rpc.{RpcEndpointAddress, RpcEndpointRef}
 import org.apache.spark.scheduler.{SlaveLost, TaskSchedulerImpl}
 import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
-import org.apache.spark.util.Utils
+import org.apache.spark.util.{ThreadUtils, Utils}
 
 /**
  * A SchedulerBackend that runs tasks on Mesos, but uses "coarse-grained" tasks, where it holds
@@ -61,9 +61,6 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
   extends CoarseGrainedSchedulerBackend(scheduler, sc.env.rpcEnv)
     with org.apache.mesos.Scheduler with MesosSchedulerUtils {
 
-  // Blacklist a slave after this many failures
-  private val MAX_SLAVE_FAILURES = 2
-
   private val maxCoresOption = conf.get(config.CORES_MAX)
 
   private val executorCoresOption = conf.getOption(config.EXECUTOR_CORES.key).map(_.toInt)
@@ -81,12 +78,15 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
 
   private val maxGpus = conf.get(MAX_GPUS)
 
+  private val executorGpusOption = conf.getOption(EXECUTOR_GPUS.key).map(_.toInt)
+
   private val taskLabels = conf.get(TASK_LABELS)
 
   private[this] val shutdownTimeoutMS = conf.get(COARSE_SHUTDOWN_TIMEOUT)
 
   // Synchronization protected by stateLock
   private[this] var stopCalled: Boolean = false
+  private[this] var offersSuppressed: Boolean = false
 
   private val launcherBackend = new LauncherBackend() {
     override protected def conf: SparkConf = sc.conf
@@ -175,17 +175,18 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
       conf.get(config.SHUFFLE_REGISTRATION_TIMEOUT))
   }
 
-  private var nextMesosTaskId = 0
+  private val metricsSource = new MesosCoarseGrainedSchedulerSource(this)
 
   @volatile var appId: String = _
 
   private var schedulerDriver: SchedulerDriver = _
 
-  def newMesosTaskId(): String = {
-    val id = nextMesosTaskId
-    nextMesosTaskId += 1
-    id.toString
-  }
+  private val schedulerUuid: String = UUID.randomUUID().toString
+  private val nextExecutorNumber = new AtomicLong()
+
+  private val reviveOffersExecutorService =
+    ThreadUtils.newDaemonSingleThreadScheduledExecutor("mesos-revive-thread")
+  private val reviveIntervalMs = conf.get(REVIVE_OFFERS_INTERVAL)
 
   override def start(): Unit = {
     super.start()
@@ -193,6 +194,9 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
     if (sc.deployMode == "client") {
       launcherBackend.connect()
     }
+
+    sc.env.metricsSystem.registerSource(metricsSource)
+
     val startedBefore = IdHelper.startedBefore.getAndSet(true)
 
     val suffix = if (startedBefore) {
@@ -202,19 +206,31 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
     }
 
     val driver = createSchedulerDriver(
-      master,
-      MesosCoarseGrainedSchedulerBackend.this,
-      sc.sparkUser,
-      sc.appName,
-      sc.conf,
-      sc.conf.get(DRIVER_WEBUI_URL).orElse(sc.ui.map(_.webUrl)),
-      None,
-      Some(sc.conf.get(DRIVER_FAILOVER_TIMEOUT)),
-      sc.conf.get(DRIVER_FRAMEWORK_ID).map(_ + suffix)
+      masterUrl = master,
+      scheduler = MesosCoarseGrainedSchedulerBackend.this,
+      sparkUser = sc.sparkUser,
+      appName = sc.appName,
+      conf = sc.conf,
+      webuiUrl = sc.conf.get(DRIVER_WEBUI_URL).orElse(sc.ui.map(_.webUrl)),
+      checkpoint = Some(sc.conf.get(CHECKPOINT)),
+      failoverTimeout = Some(sc.conf.get(DRIVER_FAILOVER_TIMEOUT)),
+      frameworkId = sc.conf.get(DRIVER_FRAMEWORK_ID).map(_ + suffix)
     )
 
     launcherBackend.setState(SparkAppHandle.State.SUBMITTED)
     startScheduler(driver)
+
+    // Periodic check if there is a need to revive mesos offers
+    reviveOffersExecutorService.scheduleAtFixedRate(new Runnable {
+      override def run(): Unit = {
+        stateLock.synchronized {
+          if (!offersSuppressed) {
+            logDebug("scheduled mesos offers revive")
+            schedulerDriver.reviveOffers
+          }
+        }
+      }
+    }, reviveIntervalMs, reviveIntervalMs, TimeUnit.MILLISECONDS)
   }
 
   def createCommand(offer: Offer, numCores: Int, taskId: String): CommandInfo = {
@@ -355,18 +371,23 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
    */
   override def resourceOffers(d: org.apache.mesos.SchedulerDriver, offers: JList[Offer]): Unit = {
     stateLock.synchronized {
+      metricsSource.recordOffers(offers.size)
+      logInfo(s"Received ${offers.size} resource offers.")
+
       if (stopCalled) {
         logDebug("Ignoring offers during shutdown")
         // Driver should simply return a stopped status on race
         // condition between this.stop() and completing here
+        metricsSource.recordDeclineUnused(offers.size)
         offers.asScala.map(_.getId).foreach(d.declineOffer)
         return
       }
 
       if (numExecutors >= executorLimit) {
-        logDebug("Executor limit reached. numExecutors: " + numExecutors +
-          " executorLimit: " + executorLimit)
         offers.asScala.map(_.getId).foreach(d.declineOffer)
+        logInfo("Executor limit reached. numExecutors: " + numExecutors +
+          " executorLimit: " + executorLimit + " . Suppressing further offers.")
+        suppressOffers(Option(d))
         launchingExecutors = false
         return
       } else {
@@ -375,8 +396,6 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
           localityWaitStartTimeNs = System.nanoTime()
         }
       }
-
-      logDebug(s"Received ${offers.size} resource offers.")
 
       val (matchedOffers, unmatchedOffers) = offers.asScala.partition { offer =>
         val offerAttributes = toAttributeMap(offer.getAttributesList)
@@ -390,6 +409,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
 
   private def declineUnmatchedOffers(
       driver: org.apache.mesos.SchedulerDriver, offers: mutable.Buffer[Offer]): Unit = {
+    metricsSource.recordDeclineUnmet(offers.size)
     offers.foreach { offer =>
       declineOffer(
         driver,
@@ -409,10 +429,12 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
   private def handleMatchedOffers(
       driver: org.apache.mesos.SchedulerDriver, offers: mutable.Buffer[Offer]): Unit = {
     val tasks = buildMesosTasks(offers)
+    var suppressionRequired = false
     for (offer <- offers) {
       val offerAttributes = toAttributeMap(offer.getAttributesList)
       val offerMem = getResource(offer.getResourcesList, "mem")
       val offerCpus = getResource(offer.getResourcesList, "cpus")
+      val offerGpus = getResource(offer.getResourcesList, "gpus")
       val offerPorts = getRangeResource(offer.getResourcesList, "ports")
       val offerReservationInfo = offer
         .getResourcesList
@@ -426,7 +448,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
         logDebug(s"Accepting offer: $id with attributes: $offerAttributes " +
           offerReservationInfo.map(resInfo =>
             s"reservation info: ${resInfo.getReservation.toString}").getOrElse("") +
-          s"mem: $offerMem cpu: $offerCpus ports: $offerPorts " +
+          s"mem: $offerMem cpu: $offerCpus gpu: $offerGpus ports: $offerPorts " +
           s"resources: ${offer.getResourcesList.asScala.mkString(",")}." +
           s"  Launching ${offerTasks.size} Mesos tasks.")
 
@@ -434,27 +456,38 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
           val taskId = task.getTaskId
           val mem = getResource(task.getResourcesList, "mem")
           val cpus = getResource(task.getResourcesList, "cpus")
+          val gpus = getResource(task.getResourcesList, "gpus")
           val ports = getRangeResource(task.getResourcesList, "ports").mkString(",")
 
           logDebug(s"Launching Mesos task: ${taskId.getValue} with mem: $mem cpu: $cpus" +
-            s" ports: $ports" + s" on slave with slave id: ${task.getSlaveId.getValue} ")
+            s" gpu: $gpus ports: $ports" + s" on slave with slave id: ${task.getSlaveId.getValue} ")
+
+          metricsSource.recordTaskLaunch(taskId.getValue, totalCoresAcquired >= maxCores)
         }
 
         driver.launchTasks(
           Collections.singleton(offer.getId),
           offerTasks.asJava)
       } else if (totalCoresAcquired >= maxCores) {
+        suppressionRequired = true
         // Reject an offer for a configurable amount of time to avoid starving other frameworks
+        metricsSource.recordDeclineFinished
         declineOffer(driver,
           offer,
           Some("reached spark.cores.max"),
           Some(rejectOfferDurationForReachedMaxCores))
       } else {
+        metricsSource.recordDeclineUnused(1)
         declineOffer(
           driver,
           offer,
           Some("Offer was declined due to unmet task launch constraints."))
       }
+    }
+
+    if (suppressionRequired) {
+      logInfo("Max core number is reached. Suppressing further offers.")
+      suppressOffers(Option.empty)
     }
   }
 
@@ -505,11 +538,11 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
         if (canLaunchTask(slaveId, offer.getHostname, resources)) {
           // Create a task
           launchTasks = true
-          val taskId = newMesosTaskId()
+          val taskSeqNumber = nextExecutorNumber.getAndIncrement()
+          val taskId = s"${schedulerUuid}-$taskSeqNumber"
           val offerCPUs = getResource(resources, "cpus").toInt
-          val taskGPUs = Math.min(
-            Math.max(0, maxGpus - totalGpusAcquired), getResource(resources, "gpus").toInt)
-
+          val offerGPUs = getResource(resources, "gpus").toInt
+          var taskGPUs = executorGpus(offerGPUs)
           val taskCPUs = executorCores(offerCPUs)
           val taskMemory = executorMemory(sc)
 
@@ -519,10 +552,10 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
             partitionTaskResources(resources, taskCPUs, taskMemory, taskGPUs)
 
           val taskBuilder = MesosTaskInfo.newBuilder()
-            .setTaskId(TaskID.newBuilder().setValue(taskId.toString).build())
+            .setTaskId(TaskID.newBuilder().setValue(taskId).build())
             .setSlaveId(offer.getSlaveId)
             .setCommand(createCommand(offer, taskCPUs + extraCoresPerExecutor, taskId))
-            .setName(s"${sc.appName} $taskId")
+            .setName(s"${sc.appName} $taskSeqNumber")
             .setLabels(MesosProtoUtils.mesosLabels(taskLabels))
             .addAllResources(resourcesToUse.asJava)
             .setContainer(getContainerInfo(sc.conf))
@@ -573,7 +606,9 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
                             resources: JList[Resource]): Boolean = {
     val offerMem = getResource(resources, "mem")
     val offerCPUs = getResource(resources, "cpus").toInt
+    val offerGPUs = getResource(resources, "gpus").toInt
     val cpus = executorCores(offerCPUs)
+    val gpus = executorGpus(offerGPUs)
     val mem = executorMemory(sc)
     val ports = getRangeResource(resources, "ports")
     val meetsPortRequirements = checkPorts(sc.conf, ports)
@@ -583,9 +618,21 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
       cpus + totalCoresAcquired <= maxCores &&
       mem <= offerMem &&
       numExecutors < executorLimit &&
-      slaves.get(slaveId).map(_.taskFailures).getOrElse(0) < MAX_SLAVE_FAILURES &&
+      gpus <= offerGPUs &&
+      gpus + totalGpusAcquired <= maxGpus &&
+      // nodeBlacklist() currently only gets updated based on failures in spark tasks.
+      // If a mesos task fails to even start -- that is,
+      // if a spark executor fails to launch on a node -- nodeBlacklist does not get updated
+      // see SPARK-24567 for details
+      !scheduler.nodeBlacklist().contains(offerHostname) &&
       meetsPortRequirements &&
       satisfiesLocality(offerHostname)
+  }
+
+  private def executorGpus(offerGPUs: Int): Int = {
+    executorGpusOption.getOrElse(
+      math.min(offerGPUs, maxGpus - totalGpusAcquired)
+    )
   }
 
   private def executorCores(offerCPUs: Int): Int = {
@@ -621,6 +668,9 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
     logInfo(s"Mesos task $taskId is now ${status.getState}")
 
     stateLock.synchronized {
+
+      metricsSource.recordTaskStatus(taskId, status.getState, state)
+
       val slave = slaves(slaveId)
 
       // If the shuffle service is enabled, have the driver register with each one of the
@@ -659,19 +709,32 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
           totalGpusAcquired -= gpus
           gpusByTaskId -= taskId
         }
-        // If it was a failure, mark the slave as failed for blacklisting purposes
         if (TaskState.isFailed(state)) {
           slave.taskFailures += 1
-
-          if (slave.taskFailures >= MAX_SLAVE_FAILURES) {
-            logInfo(s"Blacklisting Mesos slave $slaveId due to too many failures; " +
-                "is Spark installed on it?")
-          }
+          logError(s"Mesos task $taskId failed on Mesos slave $slaveId.")
         }
         executorTerminated(d, slaveId, taskId, s"Executor finished with state $state")
         // In case we'd rejected everything before but have now lost a node
-        d.reviveOffers()
+        if (state != TaskState.FINISHED) {
+          logInfo("Reviving offers due to a failed executor task.")
+          reviveOffers(Option(d))
+        }
       }
+    }
+  }
+
+  private def reviveOffers(driver: Option[org.apache.mesos.SchedulerDriver]): Unit = {
+    stateLock.synchronized {
+      metricsSource.recordRevive
+      offersSuppressed = false
+      driver.getOrElse(schedulerDriver).reviveOffers
+    }
+  }
+
+  private def suppressOffers(driver: Option[org.apache.mesos.SchedulerDriver]): Unit = {
+    stateLock.synchronized {
+      offersSuppressed = true
+      driver.getOrElse(schedulerDriver).suppressOffers
     }
   }
 
@@ -681,6 +744,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
   }
 
   override def stop(): Unit = {
+    reviveOffersExecutorService.shutdownNow()
     stopSchedulerBackend()
     launcherBackend.setState(SparkAppHandle.State.FINISHED)
     launcherBackend.close()
@@ -738,6 +802,7 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
       // removeExecutor() internally will send a message to the driver endpoint but
       // the driver endpoint is not available now, otherwise an exception will be thrown.
       if (!stopCalled) {
+        logInfo(s"Executor terminated, removing executor $taskId")
         removeExecutor(taskId, SlaveLost(reason))
       }
       slaves(slaveId).taskIDs.remove(taskId)
@@ -763,7 +828,12 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
     // We don't truly know if we can fulfill the full amount of executors
     // since at coarse grain it depends on the amount of slaves available.
     logInfo("Capping the total amount of executors to " + requestedTotal)
+    val reviveNeeded = executorLimit < requestedTotal
     executorLimitOption = Some(requestedTotal)
+    if (reviveNeeded && schedulerDriver != null) {
+      logInfo("The executor limit increased. Reviving offers.")
+      reviveOffers(Option.empty)
+    }
     // Update the locality wait start time to continue trying for locality.
     localityWaitStartTimeNs = System.nanoTime()
     true
@@ -792,6 +862,36 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
   private def numExecutors(): Int = {
     slaves.values.map(_.taskIDs.size).sum
   }
+
+  // Calls used for metrics polling, see MesosCoarseGrainedSchedulerSource:
+  def getCoresUsed(): Double = totalCoresAcquired
+  def getMaxCores(): Double = maxCores
+  def getMeanCoresPerTask(): Double = {
+    if (coresByTaskId.size == 0) {
+      0
+    } else {
+      coresByTaskId.values.sum / coresByTaskId.size.toDouble
+    }
+  }
+
+  def getGpusUsed(): Double = totalGpusAcquired
+  def getMaxGpus(): Double = maxGpus
+  def getMeanGpusPerTask(): Double = {
+    if (gpusByTaskId.size == 0) {
+      0
+    } else {
+      gpusByTaskId.values.sum / gpusByTaskId.size.toDouble
+    }
+  }
+
+  def isExecutorLimitEnabled(): Boolean = !executorLimitOption.isEmpty
+  def getExecutorLimit(): Int = executorLimit
+
+  def getTaskCount(): Int = coresByTaskId.size
+  def getTaskFailureCount(): Int = slaves.values.map(_.taskFailures).sum
+  def getKnownAgentsCount(): Int = slaves.size
+  def getOccupiedAgentsCount(): Int = slaves.values.map(_.taskIDs.size).filter(_ != 0).size
+  def getBlacklistedAgentCount(): Int = scheduler.nodeBlacklist().size
 }
 
 private class Slave(val hostname: String) {

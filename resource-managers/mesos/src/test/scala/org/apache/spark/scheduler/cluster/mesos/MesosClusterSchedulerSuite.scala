@@ -33,6 +33,7 @@ import org.apache.spark.{LocalSparkContext, SparkConf, SparkFunSuite}
 import org.apache.spark.deploy.Command
 import org.apache.spark.deploy.mesos.MesosDriverDescription
 import org.apache.spark.deploy.mesos.config
+import org.apache.spark.internal.{ config => internalConfig }
 
 class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext with MockitoSugar {
 
@@ -59,6 +60,12 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
   }
 
   private def testDriverDescription(submissionId: String): MesosDriverDescription = {
+    testDriverDescription(submissionId, Map[String, String]())
+  }
+
+  private def testDriverDescription(
+      submissionId: String,
+      schedulerProps: Map[String, String]): MesosDriverDescription = {
     new MesosDriverDescription(
       "d1",
       "jar",
@@ -66,7 +73,7 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
       1,
       true,
       command,
-      Map[String, String](),
+      schedulerProps,
       submissionId,
       new Date())
   }
@@ -198,6 +205,46 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
     List(" ", "'", "<", ">", "&", "|", "?", "*", ";", "!", "#", "(", ")").foreach(char => {
       assert(escape(s"onlywrap${char}this") === wrapped(s"onlywrap${char}this"))
     })
+  }
+
+  test("escapes spark.app.name correctly") {
+    setScheduler()
+
+    val driverDesc = testDriverDescription("s1", Map[String, String](
+      "spark.app.name" -> "AnApp With $pecialChars.py",
+      config.EXECUTOR_HOME.key -> "test"
+    ))
+
+    val cmdString = scheduler.getDriverCommandValue(driverDesc)
+    assert(cmdString.contains("AnApp With \\$pecialChars.py"))
+  }
+
+  test("escapes extraJavaOptions correctly") {
+    setScheduler()
+
+    val driverDesc = testDriverDescription("s1", Map[String, String](
+      "spark.app.name" -> "app.py",
+      config.EXECUTOR_HOME.key -> "test",
+      "spark.driver.extraJavaOptions" -> "-DparamA=\"val1 val2\" -Dpath=$PATH"
+    ))
+
+    val cmdString = scheduler.getDriverCommandValue(driverDesc)
+    assert(cmdString.contains(
+      "\"spark.driver.extraJavaOptions=-DparamA=\\\"val1 val2\\\" -Dpath=\\$PATH"))
+  }
+
+  test("does not escape $MESOS_SANDBOX for --py-files when using a docker image") {
+    setScheduler()
+
+    val driverDesc = testDriverDescription("s1", Map[String, String](
+      "spark.app.name" -> "app.py",
+      config.EXECUTOR_DOCKER_IMAGE.key -> "test/spark:01",
+      internalConfig.SUBMIT_PYTHON_FILES.key -> "http://site.com/extraPythonFile.py"
+    ))
+
+    val cmdString = scheduler.getDriverCommandValue(driverDesc)
+    assert(!cmdString.contains("\\$MESOS_SANDBOX/extraPythonFile.py"))
+    assert(cmdString.contains("$MESOS_SANDBOX/extraPythonFile.py"))
   }
 
   test("supports spark.mesos.driverEnv.*") {
@@ -530,6 +577,88 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
     assert(state.launchedDrivers.head.taskId.getValue.endsWith("-retry-1"))
   }
 
+  test("restarts supervised drivers without backoff if node is draining") {
+    val conf = new SparkConf()
+    conf.setMaster("mesos://localhost:5050")
+    conf.setAppName("TestNodeDrainingEvents")
+    setScheduler(conf.getAll.toMap)
+
+    val mem = 1000
+    val cpu = 1
+    val offers = List(
+      Utils.createOffer("o1", "s1", mem, cpu, None),
+      Utils.createOffer("o2", "s2", mem, cpu, None))
+
+    val response = scheduler.submitDriver(
+      new MesosDriverDescription("d1", "jar", 100, 1, true, command,
+        Map((config.EXECUTOR_HOME.key, "test"), ("spark.app.name", "test")), "sub1", new Date()))
+    assert(response.success)
+
+    // Offer a resource to launch the submitted driver and send TASK_RUNNING
+    scheduler.resourceOffers(driver, Collections.singletonList(offers.head))
+    var state = scheduler.getSchedulerState()
+    assert(state.launchedDrivers.size === 1)
+
+    // Kill task with state TASK_KILLED and reason REASON_SLAVE_DRAINING
+    val agent1 = SlaveID.newBuilder().setValue("s1").build()
+    var taskStatus = TaskStatus.newBuilder()
+      .setTaskId(TaskID.newBuilder().setValue(response.submissionId).build())
+      .setSlaveId(agent1)
+      .setState(MesosTaskState.TASK_KILLED)
+      .setReason(TaskStatus.Reason.REASON_SLAVE_DRAINING)
+      .build()
+
+    scheduler.statusUpdate(driver, taskStatus)
+    state = scheduler.getSchedulerState()
+    assert(state.launchedDrivers.isEmpty)
+    assert(state.pendingRetryDrivers.size === 1)
+
+    assert(
+      state.pendingRetryDrivers.head.retryState.exists { retryState =>
+        retryState.nextRetry.getTime <= new Date().getTime &&
+          retryState.retries === 1 &&
+          retryState.waitTime === 1
+      }
+    )
+
+    // Offer new resource to retry driver on a new agent
+    val agent2 = SlaveID.newBuilder().setValue("s2").build()
+    Thread.sleep(1500)
+    scheduler.resourceOffers(driver, Collections.singletonList(offers(1)))
+    taskStatus = TaskStatus.newBuilder()
+      .setTaskId(TaskID.newBuilder().setValue(response.submissionId).build())
+      .setSlaveId(agent2)
+      .setState(MesosTaskState.TASK_RUNNING)
+      .build()
+
+    scheduler.statusUpdate(driver, taskStatus)
+    state = scheduler.getSchedulerState()
+    assert(state.pendingRetryDrivers.isEmpty)
+    assert(state.launchedDrivers.size == 1)
+
+    // Kill retried task with state TASK_GONE_BY_OPERATOR and reason REASON_SLAVE_DRAINING
+    val newTaskId = state.launchedDrivers.head.taskId.getValue
+    taskStatus = TaskStatus.newBuilder()
+      .setTaskId(TaskID.newBuilder().setValue(newTaskId).build())
+      .setSlaveId(agent2)
+      .setState(MesosTaskState.TASK_GONE_BY_OPERATOR)
+      .setReason(TaskStatus.Reason.REASON_SLAVE_DRAINING)
+      .build()
+
+    scheduler.statusUpdate(driver, taskStatus)
+    state = scheduler.getSchedulerState()
+    assert(state.launchedDrivers.isEmpty)
+    assert(state.pendingRetryDrivers.size === 1)
+
+    assert(
+      state.pendingRetryDrivers.head.retryState.exists { retryState =>
+        retryState.nextRetry.getTime <= new Date().getTime &&
+          retryState.retries === 2 &&
+          retryState.waitTime === 1
+      }
+    )
+  }
+
   test("Declines offer with refuse seconds = 120.") {
     setScheduler()
 
@@ -592,7 +721,7 @@ class MesosClusterSchedulerSuite extends SparkFunSuite with LocalSparkContext wi
 
     val expectedCmd = "cd spark-version*;  " +
         "bin/spark-submit --name \"app name\" --master mesos://mesos://localhost:5050 " +
-        "--driver-cores 1.0 --driver-memory 1000M --class Main --py-files  " +
+        "--driver-cores 1.0 --driver-memory 1000M --class Main " +
         "--conf spark.executor.uri=s3a://bucket/spark-version.tgz " +
         "--conf \"another.conf=\\\\value\" " +
         "--conf \"spark.app.name=app name\" " +

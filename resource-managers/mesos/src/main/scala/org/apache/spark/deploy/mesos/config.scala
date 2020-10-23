@@ -134,10 +134,22 @@ package object config {
 
   private[spark] val executorSecretConfig = new MesosSecretConfig("executor")
 
+  private[spark] val CHECKPOINT =
+    ConfigBuilder("spark.mesos.checkpoint")
+      .doc("If set to true, the mesos agents that are running the Spark executors will write the " +
+        "the framework pid, executor pids and status updates to disk. If the agent exits " +
+        "(e.g., due to a crash or as part of upgrading Mesos), this checkpointed data allows " +
+        "the restarted agent to reconnect to executors that were started by the old instance " +
+        "of the agent. Enabling checkpointing improves fault tolerance, at the cost of a " +
+        "(usually small) increase in disk I/O.")
+      .version("3.0.1")
+      .booleanConf
+      .createWithDefault(false)
+
   private[spark] val DRIVER_FAILOVER_TIMEOUT =
     ConfigBuilder("spark.mesos.driver.failoverTimeout")
       .doc("Amount of time in seconds that the master will wait to hear from the driver, " +
-          "during a temporary disconnection, before tearing down all the executors.")
+        "during a temporary disconnection, before tearing down all the executors.")
       .version("2.3.0")
       .doubleConf
       .createWithDefault(0.0)
@@ -352,10 +364,18 @@ package object config {
 
   private[spark] val MAX_GPUS =
     ConfigBuilder("spark.mesos.gpus.max")
-      .doc("Set the maximum number GPU resources to acquire for this job. Note that executors " +
-        "will still launch when no GPU resources are found since this configuration is just an " +
-        "upper limit and not a guaranteed amount.")
+      .doc("Set the maximum number GPU resources that can be acquired for this job. " +
+        "If total number of gpus to request exceeds this setting, the new executors will " +
+        "not get launched. The executors that have obtained gpus before exceeding this " +
+        "setting will still be launched.")
       .version("2.1.0")
+      .intConf
+      .createWithDefault(0)
+
+  private[spark] val EXECUTOR_GPUS =
+    ConfigBuilder("spark.mesos.executor.gpus")
+      .doc("Set the hard limit on the number of gpus to request for each executor.")
+      .version("3.0.1")
       .intConf
       .createWithDefault(0)
 
@@ -396,6 +416,24 @@ package object config {
       .version("1.5.0")
       .stringConf
       .createOptional
+
+  private[spark] val ENFORCE_DISPATCHER_ROLE =
+    ConfigBuilder("spark.mesos.dispatcher.role.enforce")
+      .doc("When enabled, Mesos Dispatcher will reject all submissions which attempt to override " +
+        "<pre>spark.mesos.role</pre> the Dispatcher is using itself. This flag should be " +
+        "enabled when all the applications submitted to a single Dispatcher must be enforced " +
+        "to use the same role.")
+      .version("3.0.1")
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val REVIVE_OFFERS_INTERVAL =
+    ConfigBuilder("spark.mesos.scheduler.revive.interval")
+      .doc("Amount of milliseconds between periodic revive calls to Mesos, when the job " +
+        "driver is not suppressing resource offers.")
+      .version("3.0.1")
+      .timeConf(TimeUnit.MILLISECONDS)
+      .createWithDefaultString("10s")
 
   private[spark] val DRIVER_ENV_PREFIX = "spark.mesos.driverEnv."
   private[spark] val DISPATCHER_DRIVER_DEFAULT_PREFIX = "spark.mesos.dispatcher.driverDefault."

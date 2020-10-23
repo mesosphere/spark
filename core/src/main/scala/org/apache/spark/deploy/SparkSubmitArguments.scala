@@ -40,7 +40,8 @@ import org.apache.spark.util.Utils
  * The env argument is used for testing.
  */
 private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, String] = sys.env)
-  extends SparkSubmitArgumentsParser with Logging {
+    extends SparkSubmitArgumentsParser
+    with Logging {
   var master: String = null
   var deployMode: String = null
   var executorMemory: String = null
@@ -81,7 +82,7 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
   var driverCores: String = null
   var submissionToKill: String = null
   var submissionToRequestStatusFor: String = null
-  var useRest: Boolean = false // used internally
+  var useRest: Boolean = true // used internally
 
   /** Default properties present in the currently defined defaults file. */
   lazy val defaultSparkProperties: HashMap[String, String] = {
@@ -91,13 +92,15 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
     }
     Option(propertiesFile).foreach { filename =>
       val properties = Utils.getPropertiesFromFile(filename)
-      properties.foreach { case (k, v) =>
-        defaultProperties(k) = v
+      properties.foreach {
+        case (k, v) =>
+          defaultProperties(k) = v
       }
       // Property files may contain sensitive information, so redact before printing
       if (verbose) {
-        Utils.redact(properties).foreach { case (k, v) =>
-          logInfo(s"Adding default property: $k=$v")
+        Utils.redact(properties).foreach {
+          case (k, v) =>
+            logInfo(s"Adding default property: $k=$v")
         }
       }
     }
@@ -114,8 +117,6 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
   // Use `sparkProperties` map along with env vars to fill in any missing parameters
   loadEnvironmentArguments()
 
-  useRest = sparkProperties.getOrElse("spark.master.rest.enabled", "false").toBoolean
-
   validateArguments()
 
   /**
@@ -126,10 +127,11 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
     // Use common defaults file, if not specified by user
     propertiesFile = Option(propertiesFile).getOrElse(Utils.getDefaultPropertiesFile(env))
     // Honor --conf before the defaults file
-    defaultSparkProperties.foreach { case (k, v) =>
-      if (!sparkProperties.contains(k)) {
-        sparkProperties(k) = v
-      }
+    defaultSparkProperties.foreach {
+      case (k, v) =>
+        if (!sparkProperties.contains(k)) {
+          sparkProperties(k) = v
+        }
     }
   }
 
@@ -188,9 +190,11 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
     ivySettingsPath = sparkProperties.get("spark.jars.ivySettings")
     packages = Option(packages).orElse(sparkProperties.get("spark.jars.packages")).orNull
     packagesExclusions = Option(packagesExclusions)
-      .orElse(sparkProperties.get("spark.jars.excludes")).orNull
+      .orElse(sparkProperties.get("spark.jars.excludes"))
+      .orNull
     repositories = Option(repositories)
-      .orElse(sparkProperties.get("spark.jars.repositories")).orNull
+      .orElse(sparkProperties.get("spark.jars.repositories"))
+      .orNull
     deployMode = Option(deployMode)
       .orElse(sparkProperties.get(config.SUBMIT_DEPLOY_MODE.key))
       .orElse(env.get("DEPLOY_MODE"))
@@ -259,15 +263,16 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
       error("Total executor cores must be a positive number")
     }
     if (!dynamicAllocationEnabled &&
-      numExecutors != null && Try(numExecutors.toInt).getOrElse(-1) <= 0) {
+        numExecutors != null && Try(numExecutors.toInt).getOrElse(-1) <= 0) {
       error("Number of executors must be a positive number")
     }
 
     if (master.startsWith("yarn")) {
       val hasHadoopEnv = env.contains("HADOOP_CONF_DIR") || env.contains("YARN_CONF_DIR")
       if (!hasHadoopEnv && !Utils.isTesting) {
-        error(s"When running with master '$master' " +
-          "either HADOOP_CONF_DIR or YARN_CONF_DIR must be set in the environment.")
+        error(
+          s"When running with master '$master' " +
+            "either HADOOP_CONF_DIR or YARN_CONF_DIR must be set in the environment.")
       }
     }
 
@@ -458,12 +463,11 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
       error(s"Unrecognized option '$opt'.")
     }
 
-    primaryResource =
-      if (!SparkSubmit.isShell(opt) && !SparkSubmit.isInternal(opt)) {
-        Utils.resolveURI(opt).toString
-      } else {
-        opt
-      }
+    primaryResource = if (!SparkSubmit.isShell(opt) && !SparkSubmit.isInternal(opt)) {
+      Utils.resolveURI(opt).toString
+    } else {
+      opt
+    }
     isPython = SparkSubmit.isPython(opt)
     isR = SparkSubmit.isR(opt)
     false
@@ -477,7 +481,8 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
     if (unknownParam != null) {
       logInfo("Unknown/unsupported param " + unknownParam)
     }
-    val command = sys.env.getOrElse("_SPARK_CMD_USAGE",
+    val command = sys.env.getOrElse(
+      "_SPARK_CMD_USAGE",
       """Usage: spark-submit [options] <app jar | python file | R file> [app arguments]
         |Usage: spark-submit --kill [submission ID] --master [spark://...]
         |Usage: spark-submit --status [submission ID] --master [spark://...]
@@ -485,8 +490,7 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
     logInfo(command)
 
     val mem_mb = Utils.DEFAULT_DRIVER_MEM_MB
-    logInfo(
-      s"""
+    logInfo(s"""
         |Options:
         |  --master MASTER_URL         spark://host:port, mesos://host:port, yarn,
         |                              k8s://https://host:port, or local (Default: local[*]).
@@ -564,8 +568,7 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
         |  --queue QUEUE_NAME          The YARN queue to submit to (Default: "default").
         |  --archives ARCHIVES         Comma separated list of archives to be extracted into the
         |                              working directory of each executor.
-      """.stripMargin
-    )
+      """.stripMargin)
 
     if (SparkSubmit.isSqlShell(mainClass)) {
       logInfo("CLI options:")
@@ -602,7 +605,9 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
       System.setSecurityManager(sm)
 
       try {
-        Utils.classForName(mainClass).getMethod("main", classOf[Array[String]])
+        Utils
+          .classForName(mainClass)
+          .getMethod("main", classOf[Array[String]])
           .invoke(null, Array(HELP))
       } catch {
         case e: InvocationTargetException =>
@@ -615,7 +620,9 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
       stream.flush()
 
       // Get the output and discard any unnecessary lines from it.
-      Source.fromString(new String(out.toByteArray(), StandardCharsets.UTF_8)).getLines
+      Source
+        .fromString(new String(out.toByteArray(), StandardCharsets.UTF_8))
+        .getLines
         .filter { line =>
           !line.startsWith("log4j") && !line.startsWith("usage")
         }

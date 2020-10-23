@@ -36,21 +36,17 @@ private[spark] object CoarseGrainedClusterMessages {
       ioEncryptionKey: Option[Array[Byte]],
       hadoopDelegationCreds: Option[Array[Byte]],
       resourceProfile: ResourceProfile)
-    extends CoarseGrainedClusterMessage
-
-  case object RetrieveLastAllocatedExecutorId extends CoarseGrainedClusterMessage
+      extends CoarseGrainedClusterMessage
 
   // Driver to executors
   case class LaunchTask(data: SerializableBuffer) extends CoarseGrainedClusterMessage
 
   case class KillTask(taskId: Long, executor: String, interruptThread: Boolean, reason: String)
-    extends CoarseGrainedClusterMessage
+      extends CoarseGrainedClusterMessage
 
-  case class KillExecutorsOnHost(host: String)
-    extends CoarseGrainedClusterMessage
+  case class KillExecutorsOnHost(host: String) extends CoarseGrainedClusterMessage
 
-  case class UpdateDelegationTokens(tokens: Array[Byte])
-    extends CoarseGrainedClusterMessage
+  case class UpdateDelegationTokens(tokens: Array[Byte]) extends CoarseGrainedClusterMessage
 
   // Executors to driver
   case class RegisterExecutor(
@@ -62,7 +58,7 @@ private[spark] object CoarseGrainedClusterMessages {
       attributes: Map[String, String],
       resources: Map[String, ResourceInformation],
       resourceProfileId: Int)
-    extends CoarseGrainedClusterMessage
+      extends CoarseGrainedClusterMessage
 
   case class LaunchedExecutor(executorId: String) extends CoarseGrainedClusterMessage
 
@@ -72,11 +68,16 @@ private[spark] object CoarseGrainedClusterMessages {
       state: TaskState,
       data: SerializableBuffer,
       resources: Map[String, ResourceInformation] = Map.empty)
-    extends CoarseGrainedClusterMessage
+      extends CoarseGrainedClusterMessage
 
   object StatusUpdate {
+
     /** Alternate factory method that takes a ByteBuffer directly for the data field */
-    def apply(executorId: String, taskId: Long, state: TaskState, data: ByteBuffer,
+    def apply(
+        executorId: String,
+        taskId: Long,
+        state: TaskState,
+        data: ByteBuffer,
         resources: Map[String, ResourceInformation]): StatusUpdate = {
       StatusUpdate(executorId, taskId, state, new SerializableBuffer(data), resources)
     }
@@ -92,17 +93,19 @@ private[spark] object CoarseGrainedClusterMessages {
   case object StopExecutors extends CoarseGrainedClusterMessage
 
   case class RemoveExecutor(executorId: String, reason: ExecutorLossReason)
-    extends CoarseGrainedClusterMessage
+      extends CoarseGrainedClusterMessage
 
   case class RemoveWorker(workerId: String, host: String, message: String)
-    extends CoarseGrainedClusterMessage
+      extends CoarseGrainedClusterMessage
 
   case class SetupDriver(driver: RpcEndpointRef) extends CoarseGrainedClusterMessage
 
   // Exchanged between the driver and the AM in Yarn client mode
   case class AddWebUIFilter(
-      filterName: String, filterParams: Map[String, String], proxyBase: String)
-    extends CoarseGrainedClusterMessage
+      filterName: String,
+      filterParams: Map[String, String],
+      proxyBase: String)
+      extends CoarseGrainedClusterMessage
 
   // Messages exchanged between the driver and the cluster manager for executor allocation
   // In Yarn mode, these are exchanged between the driver and the AM
@@ -119,7 +122,7 @@ private[spark] object CoarseGrainedClusterMessages {
       localityAwareTasks: Int,
       hostToLocalTaskCount: Map[String, Int],
       nodeBlacklist: Set[String])
-    extends CoarseGrainedClusterMessage
+      extends CoarseGrainedClusterMessage
 
   // Check if an executor was force-killed but for a reason unrelated to the running tasks.
   // This could be the case if the executor is preempted, for instance.
